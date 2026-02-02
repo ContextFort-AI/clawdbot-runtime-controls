@@ -1,4 +1,4 @@
-# AntiVirus for ClawdBot: Prompt Injection Prevention
+# AntiVirus for ClawdBot: Prompt Injection Prevention (ashwin@contextfort.ai)
 
 Runtime controls for OpenClaw that intercepts child_process calls, enforces approval for external commands via Telegram, and detects prompt injection in command outputs.
 
