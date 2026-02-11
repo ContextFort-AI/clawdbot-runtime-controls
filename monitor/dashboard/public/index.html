@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContextFort Security Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #09090b; color: #fafafa; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+    a { color: #60a5fa; text-decoration: none; }
+
+    /* Nav */
+    .nav { border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.8); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 10; }
+    .nav-inner { padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
+    .nav-brand { display: flex; align-items: center; gap: 10px; }
+    .nav-brand .icon { width: 28px; height: 28px; background: #fff; display: flex; align-items: center; justify-content: center; }
+    .nav-brand .icon svg { width: 18px; height: 18px; }
+    .nav-brand span { font-size: 17px; font-weight: 700; letter-spacing: -0.5px; text-transform: uppercase; }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .muted { color: #a1a1aa; font-size: 13px; }
+
+    /* Layout */
+    .layout { display: flex; flex: 1; min-height: calc(100vh - 56px); }
+
+    /* Sidebar */
+    .sidebar { width: 200px; border-right: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.015); padding: 16px 10px; flex-shrink: 0; }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+    .sidebar-btn { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px; color: #a1a1aa; border: none; background: none; border-radius: 6px; cursor: pointer; width: 100%; text-align: left; transition: all 0.12s; }
+    .sidebar-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+    .sidebar-btn.active { color: #fff; background: rgba(255,255,255,0.1); }
+    .sidebar-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .sidebar-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #52525b; padding: 16px 12px 6px; }
+
+    /* Main */
+    .main { flex: 1; padding: 28px 32px; overflow-y: auto; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; color: #a1a1aa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; background: transparent; cursor: pointer; transition: all 0.15s; }
+    .btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+    .btn.active { color: #fff; background: rgba(255,255,255,0.1); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* Cards */
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .card { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 20px; background: rgba(255,255,255,0.02); }
+    .card-label { font-size: 12px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .card-value { font-size: 28px; font-weight: 700; }
+    .card-sub { font-size: 12px; color: #a1a1aa; margin-top: 4px; }
+
+    /* Guard summary cards on home */
+    .guard-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+    .guard-card { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 16px; background: rgba(255,255,255,0.02); cursor: pointer; transition: all 0.15s; }
+    .guard-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); }
+    .guard-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .guard-card-header svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .guard-card-header span { font-size: 14px; font-weight: 600; }
+    .guard-stat { font-size: 12px; color: #a1a1aa; }
+    .guard-stat b { color: #fafafa; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-green { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+    .dot-red { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+    .dot-yellow { background: #eab308; box-shadow: 0 0 6px rgba(234,179,8,0.4); }
+    .dot-gray { background: #52525b; }
+
+    /* Page header */
+    .page-header { margin-bottom: 24px; }
+    .page-header h1 { font-size: 24px; font-weight: 700; }
+    .page-header p { color: #a1a1aa; font-size: 14px; margin-top: 4px; }
+
+    /* Table */
+    .table-wrap { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; }
+    .table-header { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); display: flex; align-items: center; justify-content: space-between; }
+    .table-header h3 { font-size: 14px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 16px; color: #a1a1aa; font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); }
+    td { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .cmd { font-family: ui-monospace, monospace; font-size: 12px; max-width: 400px; white-space: pre-wrap; word-break: break-all; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+    .badge-green { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .badge-red { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-yellow { background: rgba(234,179,8,0.15); color: #facc15; }
+    .badge-blue { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .badge-gray { background: rgba(255,255,255,0.08); color: #a1a1aa; }
+
+    /* Filter row */
+    .filter-row { display: flex; align-items: center; gap: 12px; }
+    select { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 5px 28px 5px 10px; font-size: 12px; color: #fff; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+
+    /* Checkbox */
+    .check-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #a1a1aa; cursor: pointer; user-select: none; }
+    .check-label input { accent-color: #60a5fa; }
+    .check-label:hover { color: #fff; }
+
+    /* Expandable payload */
+    .payload-toggle { cursor: pointer; color: #60a5fa; font-size: 12px; }
+    .payload-toggle:hover { text-decoration: underline; }
+    .payload-content { display: none; margin-top: 6px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11px; color: #a1a1aa; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; }
+    .payload-content.open { display: block; }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 48px 24px; color: #52525b; font-size: 14px; }
+
+    /* Scroll */
+    .table-body { max-height: 600px; overflow-y: auto; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .guard-cards { grid-template-columns: repeat(3, 1fr); }
+      .sidebar { width: 170px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <div class="nav-brand">
+        <div class="icon">
+          <svg fill="none" stroke="#000" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <span>ContextFort</span>
+      </div>
+      <div class="nav-right">
+        <span class="muted" id="lastUpdated"></span>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm" data-days="7" onclick="setDays(7)">7d</button>
+          <button class="btn btn-sm" data-days="30" onclick="setDays(30)">30d</button>
+          <button class="btn btn-sm active" data-days="365" onclick="setDays(365)">All</button>
+        </div>
+        <button class="btn" onclick="refresh()">
+          <svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-nav">
+        <button class="sidebar-btn active" data-page="home" onclick="switchPage('home')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Home
+        </button>
+        <button class="sidebar-btn" data-page="scan" onclick="switchPage('scan')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Secret Scanner
+        </button>
+
+        <div class="sidebar-label">Guards</div>
+
+        <button class="sidebar-btn" data-page="skill" onclick="switchPage('skill')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Skill Scanner
+          <span class="dot dot-green" id="sb-skill-dot" style="margin-left:auto"></span>
+        </button>
+        <button class="sidebar-btn" data-page="bash" onclick="switchPage('bash')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          Bash Guard
+          <span class="dot dot-green" id="sb-bash-dot" style="margin-left:auto"></span>
+        </button>
+        <button class="sidebar-btn" data-page="pi" onclick="switchPage('pi')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Prompt Injection
+          <span class="dot dot-green" id="sb-pi-dot" style="margin-left:auto"></span>
+        </button>
+        <button class="sidebar-btn" data-page="secrets" onclick="switchPage('secrets')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Secrets Guard
+          <span class="dot dot-green" id="sb-sec-dot" style="margin-left:auto"></span>
+        </button>
+        <button class="sidebar-btn" data-page="exfil" onclick="switchPage('exfil')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          Secrets Exfil Monitor
+          <span class="dot dot-green" id="sb-exfil-dot" style="margin-left:auto"></span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+
+      <!-- HOME PAGE -->
+      <div id="page-home">
+        <div class="page-header">
+          <h1>Overview</h1>
+          <p>Security status across all protection layers.</p>
+        </div>
+
+        <div class="cards">
+          <div class="card"><div class="card-label">Total Commands</div><div class="card-value" id="ov-total">-</div><div class="card-sub">intercepted by guard</div></div>
+          <div class="card"><div class="card-label">Blocked</div><div class="card-value" id="ov-blocked" style="color:#f87171">-</div><div class="card-sub">dangerous commands stopped</div></div>
+          <div class="card"><div class="card-label">Allow Rate</div><div class="card-value" id="ov-rate" style="color:#4ade80">-</div><div class="card-sub">commands passed all guards</div></div>
+          <div class="card"><div class="card-label">Active Since</div><div class="card-value" id="ov-since" style="font-size:16px">-</div><div class="card-sub">first hook loaded</div></div>
+        </div>
+
+        <!-- Active Block Banner (shown when agent is blocked) -->
+        <div id="home-block-banner" style="display:none;margin-bottom:24px;border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:16px 20px;background:rgba(239,68,68,0.08)">
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px" fill="none" stroke="#f87171" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:600;color:#f87171;margin-bottom:4px" id="home-block-title">Agent Blocked</div>
+              <div style="font-size:13px;color:#a1a1aa;margin-bottom:12px" id="home-block-reason"></div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" id="home-block-view-btn" style="color:#f87171;border-color:rgba(239,68,68,0.3)" onclick="">View Details</button>
+                <button class="btn btn-sm" id="home-block-remove-btn" style="color:#4ade80;border-color:rgba(34,197,94,0.3)" onclick="removeBlock()">Remove Block &amp; Allow OpenClaw</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anthropic API Key box (shown when not set) -->
+        <div id="anthropic-key-box" style="display:none;margin-bottom:24px;border:1px solid rgba(250,204,21,0.3);border-radius:8px;padding:16px 20px;background:rgba(250,204,21,0.06)">
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <svg style="width:20px;height:20px;flex-shrink:0;margin-top:2px" fill="none" stroke="#facc15" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:600;color:#facc15;margin-bottom:4px">Prompt Injection Detection Inactive</div>
+              <div style="font-size:13px;color:#a1a1aa;margin-bottom:12px">An Anthropic API key is required for Haiku to scan command output for prompt injection. Enter your key below or set <code style="background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;font-size:12px">ANTHROPIC_API_KEY</code> in your shell.</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="password" id="anthropic-key-input" placeholder="sk-ant-..." style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px 12px;color:#e4e4e7;font-size:13px;font-family:ui-monospace,monospace;outline:none" />
+                <button class="btn btn-sm" id="anthropic-key-save-btn" style="color:#facc15;border-color:rgba(250,204,21,0.3);white-space:nowrap" onclick="saveAnthropicKey()">Save Key</button>
+              </div>
+              <div id="anthropic-key-msg" style="font-size:12px;margin-top:8px;display:none"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="guard-cards">
+          <div class="guard-card" onclick="switchPage('skill')">
+            <div class="guard-card-header">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Skill Scanner</span>
+              <span class="dot dot-green" id="g-skill-dot" style="margin-left:auto"></span>
+            </div>
+            <div class="guard-stat"><b id="g-skill-blocks">0</b> blocks</div>
+          </div>
+          <div class="guard-card" onclick="switchPage('bash')">
+            <div class="guard-card-header">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              <span>Bash Guard</span>
+              <span class="dot dot-green" id="g-bash-dot" style="margin-left:auto"></span>
+            </div>
+            <div class="guard-stat"><b id="g-bash-blocks">0</b> blocks</div>
+          </div>
+          <div class="guard-card" onclick="switchPage('pi')">
+            <div class="guard-card-header">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span>Prompt Injection</span>
+              <span class="dot dot-green" id="g-pi-dot" style="margin-left:auto"></span>
+            </div>
+            <div class="guard-stat"><b id="g-pi-blocks">0</b> blocks</div>
+          </div>
+          <div class="guard-card" onclick="switchPage('secrets')">
+            <div class="guard-card-header">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>Secrets Guard</span>
+              <span class="dot dot-green" id="g-sec-dot" style="margin-left:auto"></span>
+            </div>
+            <div class="guard-stat"><b id="g-sec-blocks">0</b> blocks &middot; <b id="g-sec-redactions">0</b> redactions</div>
+          </div>
+          <div class="guard-card" onclick="switchPage('exfil')">
+            <div class="guard-card-header">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              <span>Secrets Exfil Monitor</span>
+              <span class="dot dot-green" id="g-exfil-dot" style="margin-left:auto"></span>
+            </div>
+            <div class="guard-stat"><b id="g-exfil-detections">0</b> detections</div>
+          </div>
+        </div>
+
+        <!-- Secret Scanner Summary -->
+        <div style="margin-top:24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h2 style="font-size:16px;font-weight:600">Secret Scanner</h2>
+            <button class="btn btn-sm" onclick="switchPage('scan')">View Details</button>
+          </div>
+          <div class="card" id="home-scan-card">
+            <div style="display:flex;align-items:center;gap:12px">
+              <svg style="width:20px;height:20px;flex-shrink:0" fill="none" stroke="#a1a1aa" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <div>
+                <div style="font-size:14px" id="home-scan-status">Loading...</div>
+                <div style="font-size:12px;color:#a1a1aa;margin-top:2px" id="home-scan-detail"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECRET SCANNER PAGE -->
+      <div id="page-scan" style="display:none">
+        <div class="page-header">
+          <h1>Secret Scanner</h1>
+          <p>Scan directories accessible to OpenClaw for hardcoded secrets using TruffleHog.</p>
+        </div>
+
+        <div class="cards" style="margin-bottom:24px">
+          <div class="card"><div class="card-label">TruffleHog</div><div class="card-value" id="scan-thog-status" style="font-size:16px">Checking...</div></div>
+          <div class="card"><div class="card-label">Last Scan</div><div class="card-value" id="scan-last-time" style="font-size:16px">Never</div></div>
+          <div class="card"><div class="card-label">LIVE Keys</div><div class="card-value" id="scan-verified" style="color:#f87171">-</div></div>
+          <div class="card"><div class="card-label">Total Findings</div><div class="card-value" id="scan-total">-</div></div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:24px">
+          <button class="btn" id="scan-run-btn" onclick="runScan()">
+            <svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Run Scan
+          </button>
+          <label class="check-label"><input type="checkbox" id="scan-live-only" checked onchange="renderScanFindings()"> Show only LIVE keys</label>
+          <button class="btn" id="scan-solve-btn" onclick="runSolve()" style="display:none">
+            <svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Scrub Selected
+          </button>
+        </div>
+
+        <!-- Scan targets -->
+        <div id="scan-targets-section" style="display:none;margin-bottom:24px">
+          <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">Scanned Directories</h3>
+          <div id="scan-targets-list"></div>
+        </div>
+
+        <!-- Findings table -->
+        <div class="table-wrap">
+          <div class="table-header">
+            <h3>Findings</h3>
+            <div class="filter-row">
+              <label class="check-label" id="scan-select-all-wrap" style="display:none"><input type="checkbox" id="scan-select-all" onchange="toggleScanSelectAll()"> Select all</label>
+            </div>
+          </div>
+          <div class="table-body" id="scan-findings-body">
+            <div class="empty">No scan results yet. Click "Run Scan" to start.</div>
+          </div>
+        </div>
+
+        <!-- Solve results -->
+        <div id="scan-solve-results" style="display:none;margin-top:24px">
+          <div class="table-wrap">
+            <div class="table-header"><h3>Scrub Results</h3></div>
+            <div class="table-body" id="scan-solve-body"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SKILL SCANNER PAGE -->
+      <div id="page-skill" style="display:none">
+        <div class="page-header">
+          <h1>Skill Scanner</h1>
+          <p>Skills cross-indexed and scanned for prompt injection patterns via Haiku.</p>
+        </div>
+
+        <!-- Skills Status (top section) -->
+        <div class="table-wrap" style="margin-bottom:24px">
+          <div class="table-header">
+            <h3>Skills Overview</h3>
+          </div>
+          <div class="table-body" id="skill-status-body">
+            <div class="empty">Loading skills...</div>
+          </div>
+        </div>
+
+        <!-- File Viewer Modal -->
+        <div id="skill-file-modal" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;padding:24px">
+          <div style="background:#18181b;border:1px solid rgba(255,255,255,0.1);border-radius:8px;width:100%;max-width:720px;max-height:80vh;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.1)">
+              <span style="font-size:14px;font-weight:600" id="skill-modal-title">Files</span>
+              <button class="btn btn-sm" onclick="closeSkillModal()">&times;</button>
+            </div>
+            <div id="skill-modal-content" style="overflow:auto;padding:16px;flex:1"></div>
+          </div>
+        </div>
+
+        <!-- Activity Log (bottom section) -->
+        <div class="table-wrap">
+          <div class="table-header">
+            <h3>Activity Log</h3>
+            <div class="filter-row">
+              <label class="check-label"><input type="checkbox" id="skill-blocked-only" onchange="renderSkillPage()"> Only flagged/blocked</label>
+              <label class="check-label"><input type="checkbox" id="skill-server-only" onchange="renderSkillPage()"> Server sent events</label>
+            </div>
+          </div>
+          <div class="table-body" id="skill-table-body"></div>
+        </div>
+      </div>
+
+      <!-- BASH GUARD PAGE -->
+      <div id="page-bash" style="display:none">
+        <div class="page-header">
+          <h1>Bash Guard</h1>
+          <p>Commands blocked by static analysis rules (Tirith engine).</p>
+        </div>
+        <div class="table-wrap">
+          <div class="table-header">
+            <h3>Events</h3>
+            <div class="filter-row">
+              <label class="check-label"><input type="checkbox" id="bash-blocked-only" onchange="renderGuardPage('bash')"> Show only blocked</label>
+              <label class="check-label"><input type="checkbox" id="bash-show-system" onchange="renderGuardPage('bash')"> Show system commands</label>
+              <label class="check-label"><input type="checkbox" id="bash-server-only" onchange="renderGuardPage('bash')"> Server sent events</label>
+            </div>
+          </div>
+          <div class="table-body" id="bash-table-body"></div>
+        </div>
+      </div>
+
+      <!-- PROMPT INJECTION PAGE -->
+      <div id="page-pi" style="display:none">
+        <div class="page-header">
+          <h1>Prompt Injection Guard</h1>
+          <p>Command outputs scanned for prompt injection attempts via local Haiku.</p>
+        </div>
+        <div class="table-wrap">
+          <div class="table-header">
+            <h3>Scan Events</h3>
+            <div class="filter-row">
+              <label class="check-label"><input type="checkbox" id="pi-blocked-only" onchange="renderPiPage()"> Only flagged</label>
+              <label class="check-label"><input type="checkbox" id="pi-server-only" onchange="renderPiPage()"> Server sent events</label>
+            </div>
+          </div>
+          <div class="table-body" id="pi-table-body"></div>
+        </div>
+      </div>
+
+      <!-- SECRETS GUARD PAGE -->
+      <div id="page-secrets" style="display:none">
+        <div class="page-header">
+          <h1>Secrets Guard</h1>
+          <p>Env var leak prevention and output secret redaction.</p>
+        </div>
+        <div class="table-wrap">
+          <div class="table-header">
+            <h3>Events</h3>
+            <div class="filter-row">
+              <label class="check-label"><input type="checkbox" id="secrets-blocked-only" onchange="renderSecretsPage()"> Only show blocked</label>
+              <label class="check-label"><input type="checkbox" id="secrets-server-only" onchange="renderSecretsPage()"> Server sent events</label>
+            </div>
+          </div>
+          <div class="table-body" id="secrets-table-body"></div>
+        </div>
+      </div>
+
+      <!-- EXFIL MONITOR PAGE -->
+      <div id="page-exfil" style="display:none">
+        <div class="page-header">
+          <h1>Secrets Exfil Monitor</h1>
+          <p>Detects when sensitive environment variables are transmitted to external servers via curl, wget, or nc.</p>
+        </div>
+
+        <!-- Destination Allowlist -->
+        <div class="card" style="margin-bottom:24px;padding:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div>
+              <h3 style="font-size:15px;font-weight:600;margin-bottom:4px">Destination Allowlist</h3>
+              <div style="font-size:12px;color:#a1a1aa">When enabled, commands sending secrets to domains NOT in this list will be blocked.</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span id="exfil-al-status-badge"></span>
+              <button class="btn btn-sm" id="exfil-al-toggle-btn" onclick="toggleExfilAllowlist()">Enable</button>
+            </div>
+          </div>
+          <div id="exfil-al-domains" style="margin-bottom:12px"></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="exfil-al-input" placeholder="e.g. api.notion.com or *.supabase.co" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px 12px;color:#e4e4e7;font-size:13px;font-family:ui-monospace,monospace;outline:none" />
+            <button class="btn btn-sm" onclick="addExfilDomain()">Add</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-header">
+            <h3>Events</h3>
+            <div class="filter-row">
+              <label class="check-label"><input type="checkbox" id="exfil-blocked-only" onchange="renderGuardPage('exfil')"> Only show blocked</label>
+              <label class="check-label"><input type="checkbox" id="exfil-show-passed" onchange="renderGuardPage('exfil')"> Show passed</label>
+              <label class="check-label"><input type="checkbox" id="exfil-server-only" onchange="renderGuardPage('exfil')"> Server sent events</label>
+            </div>
+          </div>
+          <div class="table-body" id="exfil-table-body"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+<script>
+let currentDays = 365;
+let currentPage = 'home';
+let localEvents = [];
+let serverEvents = [];
+let overviewData = {};
+
+// Map tab name → guard field value in log events
+const GUARD_KEY = { skill: 'skill', bash: 'tirith', pi: 'prompt_injection', secrets: 'env_var', exfil: 'exfil' };
+// All events for this guard (passed + blocked + special)
+const GUARD_EVENTS = {
+  skill: e => e.guard === 'skill',
+  bash: e => e.guard === 'tirith',
+  pi: e => e.guard === 'prompt_injection',
+  secrets: e => e.guard === 'env_var' || e.event === 'output_redacted',
+  exfil: e => e.guard === 'exfil',
+};
+// Only blocked/flagged/detected events for this guard
+const GUARD_BLOCKED = {
+  skill: e => e.guard === 'skill' && (e.decision === 'block' || e.decision === 'scan_flagged' || e.decision === 'binary_detected'),
+  bash: e => e.guard === 'tirith' && e.decision === 'block',
+  pi: e => e.guard === 'prompt_injection' && (e.decision === 'block' || e.decision === 'scan_flagged'),
+  secrets: e => (e.guard === 'env_var' && e.decision === 'block') || e.event === 'output_redacted',
+  exfil: e => e.guard === 'exfil',
+};
+const SERVER_GUARD = {
+  skill: e => e.destination === 'supabase' || (e.destination === 'posthog' && e.event && e.event.includes('skill')),
+  bash: e => e.destination === 'posthog' && e.properties?.blocker === 'tirith',
+  pi: e => e.destination === 'posthog' && (e.event === 'output_scan_started' || e.event === 'output_scan_result' || e.properties?.blocker === 'prompt_injection'),
+  secrets: e => e.destination === 'posthog' && (e.properties?.blocker === 'env_var_leak' || e.event === 'output_secrets_redacted'),
+  exfil: e => e.destination === 'posthog' && e.event === 'exfil_attempt',
+};
+
+function setDays(d) {
+  currentDays = d;
+  document.querySelectorAll('[data-days]').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days) === d));
+  refresh();
+}
+
+function switchPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  ['home','scan','skill','bash','pi','secrets','exfil'].forEach(p => {
+    document.getElementById('page-' + p).style.display = p === page ? '' : 'none';
+  });
+  if (page === 'scan') loadScanStatus();
+  else if (page === 'skill') renderSkillPage();
+  else if (page === 'pi') renderPiPage();
+  else if (page === 'secrets') renderSecretsPage();
+  else if (page === 'exfil') { loadExfilAllowlist(); renderGuardPage('exfil'); }
+  else if (page !== 'home') renderGuardPage(page);
+}
+
+async function refresh() {
+  try {
+    const [ov, local, server] = await Promise.all([
+      fetch(`/api/overview?days=${currentDays}`).then(r => r.json()),
+      fetch(`/api/events?type=local&days=${currentDays}&limit=5000`).then(r => r.json()),
+      fetch(`/api/events?type=server_send&days=${currentDays}&limit=2000`).then(r => r.json()),
+    ]);
+    localEvents = local.events || [];
+    serverEvents = server.events || [];
+    overviewData = ov;
+    renderOverview(ov);
+    renderSidebarDots(ov);
+    renderBlockBanner();
+    checkAnthropicKey();
+    if (currentPage === 'scan') loadScanStatus();
+    else if (currentPage === 'skill') renderSkillPage();
+    else if (currentPage === 'pi') renderPiPage();
+    else if (currentPage === 'secrets') renderSecretsPage();
+    else if (currentPage === 'exfil') { loadExfilAllowlist(); renderGuardPage('exfil'); }
+    else if (currentPage !== 'home') renderGuardPage(currentPage);
+    loadScanStatus(); // always update home scan summary
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    console.error('Refresh failed:', e);
+  }
+}
+
+function renderOverview(ov) {
+  document.getElementById('ov-total').textContent = (ov.total || 0).toLocaleString();
+  document.getElementById('ov-blocked').textContent = (ov.blocked || 0).toLocaleString();
+  const rate = ov.total > 0 ? (((ov.total - ov.blocked) / ov.total) * 100).toFixed(1) : '100.0';
+  document.getElementById('ov-rate').textContent = rate + '%';
+  document.getElementById('ov-since').textContent = ov.activeSince ? timeAgo(ov.activeSince) : 'No data';
+
+  const gs = ov.guardStatus || {};
+  document.getElementById('g-skill-blocks').textContent = gs.skill_scanner?.blocks || 0;
+  document.getElementById('g-bash-blocks').textContent = gs.bash_guard?.blocks || 0;
+  document.getElementById('g-pi-blocks').textContent = gs.prompt_injection?.blocks || 0;
+  document.getElementById('g-sec-blocks').textContent = gs.secrets_guard?.blocks || 0;
+  document.getElementById('g-sec-redactions').textContent = gs.secrets_guard?.redactions || 0;
+  document.getElementById('g-exfil-detections').textContent = gs.exfil_monitor?.detections || 0;
+
+  const hasData = ov.total > 0;
+  setDot('g-skill-dot', hasData, gs.skill_scanner?.blocks > 0);
+  setDot('g-bash-dot', hasData, gs.bash_guard?.blocks > 0);
+  setDot('g-pi-dot', hasData, gs.prompt_injection?.blocks > 0);
+  setDot('g-sec-dot', hasData, (gs.secrets_guard?.blocks > 0) || (gs.secrets_guard?.redactions > 0));
+  setDot('g-exfil-dot', hasData, gs.exfil_monitor?.detections > 0, 'dot-yellow');
+}
+
+function renderSidebarDots(ov) {
+  const gs = ov.guardStatus || {};
+  const hasData = ov.total > 0;
+  setDot('sb-skill-dot', hasData, gs.skill_scanner?.blocks > 0);
+  setDot('sb-bash-dot', hasData, gs.bash_guard?.blocks > 0);
+  setDot('sb-pi-dot', hasData, gs.prompt_injection?.blocks > 0);
+  setDot('sb-sec-dot', hasData, (gs.secrets_guard?.blocks > 0) || (gs.secrets_guard?.redactions > 0));
+  setDot('sb-exfil-dot', hasData, gs.exfil_monitor?.detections > 0, 'dot-yellow');
+}
+
+function setDot(id, hasData, hasBlocks, activeClass) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'dot ' + (hasData ? (hasBlocks ? (activeClass || 'dot-red') : 'dot-green') : 'dot-gray');
+}
+
+// =============================================
+// Home — Active Block Banner
+// =============================================
+function renderBlockBanner() {
+  const banner = document.getElementById('home-block-banner');
+  if (!banner) return;
+
+  // Find the most recent block event (scan_flagged from skill or prompt_injection, or binary_detected)
+  const blockEvent = localEvents.find(e =>
+    e.event === 'guard_check' &&
+    ((e.guard === 'skill' && (e.decision === 'scan_flagged' || e.decision === 'binary_detected')) ||
+     (e.guard === 'prompt_injection' && e.decision === 'scan_flagged'))
+  );
+
+  // Check if block was already removed
+  const unblockEvent = localEvents.find(e => e.event === 'block_removed');
+  if (unblockEvent && blockEvent && new Date(unblockEvent.ts) > new Date(blockEvent.ts)) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  if (!blockEvent) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  banner.style.display = '';
+  const guard = blockEvent.guard === 'skill' ? 'Skill Scanner' : 'Prompt Injection';
+  const guardPage = blockEvent.guard === 'skill' ? 'skill' : 'pi';
+  document.getElementById('home-block-title').textContent = `Agent Blocked — ${guard}`;
+  document.getElementById('home-block-reason').textContent = blockEvent.reason || 'A security threat was detected. All commands are blocked.';
+  document.getElementById('home-block-view-btn').setAttribute('onclick', `switchPage('${guardPage}')`);
+}
+
+async function removeBlock() {
+  if (!confirm('Remove the active block and allow OpenClaw to proceed?\n\nOnly do this if you have reviewed and resolved the security issue.')) return;
+  try {
+    const res = await fetch('/api/unblock', { method: 'POST' });
+    const data = await res.json();
+    if (data.error) { alert('Error: ' + data.error); return; }
+    document.getElementById('home-block-banner').style.display = 'none';
+    refresh();
+  } catch (e) {
+    alert('Failed to remove block: ' + e.message);
+  }
+}
+
+// =============================================
+// Anthropic API Key Box
+// =============================================
+async function checkAnthropicKey() {
+  try {
+    const res = await fetch('/api/anthropic-key');
+    const data = await res.json();
+    const box = document.getElementById('anthropic-key-box');
+    if (!data.hasKey) {
+      box.style.display = '';
+    } else {
+      box.style.display = 'none';
+    }
+  } catch {}
+}
+
+async function saveAnthropicKey() {
+  const input = document.getElementById('anthropic-key-input');
+  const msg = document.getElementById('anthropic-key-msg');
+  const key = input.value.trim();
+  if (!key) return;
+  try {
+    const res = await fetch('/api/anthropic-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    const data = await res.json();
+    msg.style.display = '';
+    if (data.error) {
+      msg.style.color = '#f87171';
+      msg.textContent = data.error;
+    } else {
+      msg.style.color = '#4ade80';
+      msg.textContent = 'Key saved. Restart openclaw for prompt injection detection to activate.';
+      input.value = '';
+      setTimeout(() => { document.getElementById('anthropic-key-box').style.display = 'none'; }, 3000);
+    }
+  } catch (e) {
+    msg.style.display = '';
+    msg.style.color = '#f87171';
+    msg.textContent = 'Failed: ' + e.message;
+  }
+}
+
+// =============================================
+// Skill Scanner Page
+// =============================================
+function renderSkillPage() {
+  renderSkillStatus();
+  renderSkillActivityLog();
+}
+
+function renderSkillStatus() {
+  const container = document.getElementById('skill-status-body');
+  // Get skill events that tell us about skills (init_skill, scanning, scan_clean, scan_flagged, binary_detected, removed, modified, deleted)
+  const skillEvents = localEvents.filter(e => e.guard === 'skill' && e.decision !== 'allow' && e.decision !== 'init');
+
+  // Build latest status per skill by path
+  const skillMap = new Map();
+  // Process in chronological order (events are newest-first, so reverse)
+  const chronological = [...skillEvents].reverse();
+  for (const e of chronological) {
+    const sp = e.detail?.skill_path;
+    if (!sp) continue;
+    const name = e.detail?.skill_name || sp.split('/').pop();
+    if (!skillMap.has(sp)) {
+      skillMap.set(sp, { name, path: sp, dir: e.detail?.skill_dir || '', status: 'clean', reason: '', fileCount: 0, fileNames: [], binaryFiles: [], fileContents: [], ts: e.ts, decision: e.decision });
+    }
+    const skill = skillMap.get(sp);
+    skill.ts = e.ts; // update to latest timestamp
+    skill.decision = e.decision;
+    if (e.detail?.file_count !== undefined) skill.fileCount = e.detail.file_count;
+    if (e.detail?.file_names) skill.fileNames = e.detail.file_names;
+    if (e.detail?.binary_files) skill.binaryFiles = e.detail.binary_files;
+    if (e.detail?.file_contents) skill.fileContents = e.detail.file_contents;
+    // Determine status
+    if (e.decision === 'scan_flagged') { skill.status = 'malicious'; skill.reason = e.reason || ''; }
+    else if (e.decision === 'binary_detected') { skill.status = 'binary'; skill.reason = e.reason || ''; }
+    else if (e.decision === 'scan_clean') { skill.status = 'clean'; skill.reason = ''; }
+    else if (e.decision === 'removed' || e.decision === 'deleted') { skill.status = 'removed'; skill.reason = ''; }
+    else if (e.decision === 'modified') { skill.status = 'scanning'; }
+    else if (e.decision === 'scanning') { skill.status = 'scanning'; }
+    else if (e.decision === 'init_skill') {
+      skill.status = e.detail?.status || 'clean';
+      skill.reason = e.detail?.flagged_reason || '';
+    }
+  }
+
+  const skills = Array.from(skillMap.values()).filter(s => s.status !== 'removed');
+
+  if (skills.length === 0) {
+    container.innerHTML = '<div class="empty">No skills discovered yet. Skills appear when openclaw-secure is active.</div>';
+    return;
+  }
+
+  container.innerHTML = `<table><thead><tr>
+    <th style="width:40px"></th>
+    <th>Skill</th>
+    <th>Path</th>
+    <th>Status</th>
+    <th>Reason</th>
+    <th style="text-align:center">Files</th>
+    <th>Last Scanned</th>
+  </tr></thead><tbody>` +
+    skills.map((s, i) => {
+      const statusBadge = s.status === 'malicious'
+        ? '<span class="badge badge-red">Malicious</span>'
+        : s.status === 'binary'
+        ? '<span class="badge badge-red">Binary</span>'
+        : s.status === 'scanning'
+        ? '<span class="badge badge-blue">Scanning</span>'
+        : '<span class="badge badge-green">Clean</span>';
+      const deleteBtn = (s.status === 'malicious' || s.status === 'binary')
+        ? `<button class="btn btn-sm" style="color:#f87171;border-color:rgba(239,68,68,0.3)" onclick="deleteSkill('${esc(s.path.replace(/'/g, "\\'"))}')">Delete</button>`
+        : '';
+      const viewFiles = s.fileNames.length > 0 || s.fileContents.length > 0
+        ? `<span class="payload-toggle" onclick="openSkillFiles(${i})">${s.fileCount || s.fileNames.length}</span>`
+        : `<span style="color:#a1a1aa">${s.fileCount || 0}</span>`;
+      return `<tr>
+        <td>${deleteBtn}</td>
+        <td style="font-weight:500;font-family:ui-monospace,monospace;font-size:13px">${esc(s.name)}</td>
+        <td style="font-size:12px;color:#a1a1aa;max-width:250px;word-break:break-all">${esc(s.path)}</td>
+        <td>${statusBadge}</td>
+        <td style="font-size:12px;color:#a1a1aa;max-width:300px">${esc(s.reason)}</td>
+        <td style="text-align:center">${viewFiles}</td>
+        <td style="white-space:nowrap;color:#a1a1aa;font-size:12px">${formatTime(s.ts)}</td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+
+  // Store skills data for file modal
+  window._skillStatusData = skills;
+}
+
+function openSkillFiles(idx) {
+  const skill = window._skillStatusData?.[idx];
+  if (!skill) return;
+  const modal = document.getElementById('skill-file-modal');
+  const title = document.getElementById('skill-modal-title');
+  const content = document.getElementById('skill-modal-content');
+  title.textContent = 'Files in ' + skill.name;
+
+  if (skill.fileContents && skill.fileContents.length > 0) {
+    content.innerHTML = skill.fileContents.map(f =>
+      `<div style="border:1px solid rgba(255,255,255,0.1);border-radius:6px;overflow:hidden;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,0.05);padding:6px 12px;font-family:ui-monospace,monospace;font-size:12px;color:#a1a1aa;border-bottom:1px solid rgba(255,255,255,0.1)">${esc(f.path)}</div>
+        <pre style="padding:8px 12px;font-size:12px;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;max-height:256px;overflow:auto;margin:0">${esc(f.content)}</pre>
+      </div>`
+    ).join('');
+  } else if (skill.fileNames && skill.fileNames.length > 0) {
+    content.innerHTML = '<div style="padding:8px 0">' + skill.fileNames.map(f =>
+      `<div style="padding:4px 0;font-family:ui-monospace,monospace;font-size:13px;color:#a1a1aa">${esc(f)}</div>`
+    ).join('') + '</div>';
+  } else {
+    content.innerHTML = '<div class="empty">No file data available for this skill.</div>';
+  }
+
+  modal.style.display = 'flex';
+}
+
+function closeSkillModal() {
+  document.getElementById('skill-file-modal').style.display = 'none';
+}
+
+async function deleteSkill(skillPath) {
+  if (!confirm('Delete this skill directory permanently?\n\n' + skillPath + '\n\nThis cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/skill/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skillPath }),
+    });
+    const data = await res.json();
+    if (data.error) { alert('Error: ' + data.error); return; }
+    // Refresh
+    refresh();
+  } catch (e) {
+    alert('Failed to delete skill: ' + e.message);
+  }
+}
+
+function renderSkillActivityLog() {
+  const serverOnly = document.getElementById('skill-server-only')?.checked;
+  const blockedOnly = document.getElementById('skill-blocked-only')?.checked;
+  const container = document.getElementById('skill-table-body');
+
+  if (serverOnly) {
+    const filtered = serverEvents.filter(SERVER_GUARD.skill || (() => false));
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">No server send events for skill scanner.</div>';
+      return;
+    }
+    container.innerHTML = `<table><thead><tr><th>Time</th><th>Destination</th><th>Event</th><th>Payload</th></tr></thead><tbody>` +
+      filtered.map((e, i) => {
+        const dest = e.destination === 'posthog' ? '<span class="badge badge-blue">PostHog</span>' : '<span class="badge badge-yellow">Supabase</span>';
+        const payloadStr = JSON.stringify(e.properties || e.payload || {}, null, 2);
+        const uid = 'skill-sv-' + i;
+        return `<tr>
+          <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+          <td>${dest}</td>
+          <td>${esc(e.event || '-')}</td>
+          <td><span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">View payload</span><div class="payload-content" id="${uid}">${esc(payloadStr)}</div></td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  } else {
+    // Show all skill-specific events (not "allow" per-command checks)
+    const skillDecisions = new Set(['init', 'init_skill', 'scanning', 'scan_clean', 'scan_flagged', 'binary_detected', 'removed', 'modified', 'deleted']);
+    let filtered = localEvents.filter(e => e.guard === 'skill' && skillDecisions.has(e.decision));
+    if (blockedOnly) {
+      filtered = filtered.filter(e => e.decision === 'scan_flagged' || e.decision === 'binary_detected');
+    }
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">' + (blockedOnly ? 'No flagged skill events.' : 'No skill activity yet.') + '</div>';
+      return;
+    }
+    container.innerHTML = `<table><thead><tr>
+      <th>Time</th>
+      <th>Event</th>
+      <th>Skill</th>
+      <th>Path</th>
+      <th>Files</th>
+      <th>Detail</th>
+    </tr></thead><tbody>` +
+      filtered.map((e, i) => {
+        const badgeMap = { init: 'badge-gray', init_skill: 'badge-gray', scanning: 'badge-blue', scan_clean: 'badge-green', scan_flagged: 'badge-red', binary_detected: 'badge-red', removed: 'badge-yellow', modified: 'badge-blue', deleted: 'badge-yellow' };
+        const labelMap = { init: 'Init', init_skill: 'Discovered', scanning: 'Scanning', scan_clean: 'Clean', scan_flagged: 'Flagged', binary_detected: 'Binary', removed: 'Removed', modified: 'Modified', deleted: 'Deleted' };
+        const badge = badgeMap[e.decision] || 'badge-gray';
+        const label = labelMap[e.decision] || e.decision;
+        const skillName = e.detail?.skill_name || '-';
+        const skillPath = e.detail?.skill_path || '';
+        const fileCount = e.detail?.file_count ?? e.detail?.file_names?.length ?? '';
+        const fileNames = e.detail?.file_names || [];
+        const binaryFiles = e.detail?.binary_files || [];
+        const uid = 'skill-log-' + i;
+        // Build detail string
+        let detailParts = [];
+        if (e.reason && e.decision !== 'init') detailParts.push(esc(e.reason));
+        let detailExtra = '';
+        if (fileNames.length > 0 || binaryFiles.length > 0 || e.detail) {
+          const detailObj = {};
+          if (fileNames.length > 0) detailObj.files = fileNames;
+          if (binaryFiles.length > 0) detailObj.binary_files = binaryFiles;
+          if (e.detail?.directories) detailObj.directories = e.detail.directories;
+          if (e.detail?.cached !== undefined) detailObj.cached = e.detail.cached;
+          if (Object.keys(detailObj).length > 0) {
+            detailExtra = ` <span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">[detail]</span><div class="payload-content" id="${uid}">${esc(JSON.stringify(detailObj, null, 2))}</div>`;
+          }
+        }
+        return `<tr>
+          <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+          <td><span class="badge ${badge}">${label}</span></td>
+          <td style="font-family:ui-monospace,monospace;font-size:13px">${esc(skillName)}</td>
+          <td style="font-size:12px;color:#a1a1aa;max-width:200px;word-break:break-all">${esc(skillPath)}</td>
+          <td style="text-align:center;color:#a1a1aa">${fileCount}</td>
+          <td style="font-size:12px;color:#a1a1aa;max-width:350px">${detailParts.join('') + detailExtra}</td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  }
+}
+
+// =============================================
+// Prompt Injection Page
+// =============================================
+function renderPiPage() {
+  const serverOnly = document.getElementById('pi-server-only')?.checked;
+  const blockedOnly = document.getElementById('pi-blocked-only')?.checked;
+  const container = document.getElementById('pi-table-body');
+
+  if (serverOnly) {
+    const filtered = serverEvents.filter(SERVER_GUARD.pi || (() => false));
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">No server send events for prompt injection guard.</div>';
+      return;
+    }
+    container.innerHTML = `<table><thead><tr><th>Time</th><th>Destination</th><th>Event</th><th>Payload</th></tr></thead><tbody>` +
+      filtered.map((e, i) => {
+        const dest = e.destination === 'posthog' ? '<span class="badge badge-blue">PostHog</span>' : '<span class="badge badge-yellow">Supabase</span>';
+        const payloadStr = JSON.stringify(e.properties || e.payload || {}, null, 2);
+        const uid = 'pi-sv-' + i;
+        return `<tr>
+          <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+          <td>${dest}</td>
+          <td>${esc(e.event || '-')}</td>
+          <td><span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">View payload</span><div class="payload-content" id="${uid}">${esc(payloadStr)}</div></td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  } else {
+    // Show only PI-specific scan events (not per-command allow checks)
+    const piDecisions = new Set(['scanning', 'scan_clean', 'scan_flagged']);
+    let filtered = localEvents.filter(e => e.guard === 'prompt_injection' && piDecisions.has(e.decision));
+    if (blockedOnly) {
+      filtered = filtered.filter(e => e.decision === 'scan_flagged');
+    }
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">' + (blockedOnly ? 'No flagged prompt injection events.' : 'No prompt injection scans yet. Scans trigger when matching command output is detected.') + '</div>';
+      return;
+    }
+    container.innerHTML = `<table><thead><tr>
+      <th>Time</th>
+      <th>Decision</th>
+      <th>Pattern Matched</th>
+      <th>Command</th>
+      <th>Haiku Decision</th>
+      <th>Haiku Reason</th>
+      <th>I/O</th>
+    </tr></thead><tbody>` +
+      filtered.map((e, i) => {
+        const badgeMap = { scanning: 'badge-blue', scan_clean: 'badge-green', scan_flagged: 'badge-red' };
+        const labelMap = { scanning: 'Scanning', scan_clean: 'Clean', scan_flagged: 'Flagged' };
+        const badge = badgeMap[e.decision] || 'badge-gray';
+        const label = labelMap[e.decision] || e.decision;
+        const pattern = e.detail?.matched_pattern || '-';
+        const modelOutput = e.detail?.model_output;
+        const haikuDecision = modelOutput ? (modelOutput.suspicious ? '<span class="badge badge-red">Suspicious</span>' : '<span class="badge badge-green">Clean</span>') : (e.decision === 'scanning' ? '<span class="badge badge-blue">Pending</span>' : '-');
+        const haikuReason = modelOutput?.reason || '-';
+        // I/O toggle
+        const uid = 'pi-io-' + i;
+        const modelInput = e.detail?.model_input || '';
+        const modelOutputStr = modelOutput ? JSON.stringify(modelOutput, null, 2) : '';
+        const hasIO = modelInput || modelOutputStr;
+        const ioHtml = hasIO
+          ? `<span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">View</span><div class="payload-content" id="${uid}"><b>Input (command output):</b>\n${esc(typeof modelInput === 'string' ? modelInput.slice(0, 3000) : JSON.stringify(modelInput).slice(0, 3000))}\n\n<b>Haiku response:</b>\n${esc(modelOutputStr)}</div>`
+          : '-';
+        return `<tr>
+          <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+          <td><span class="badge ${badge}">${label}</span></td>
+          <td style="font-family:ui-monospace,monospace;font-size:12px;max-width:200px;word-break:break-all">${esc(pattern)}</td>
+          <td class="cmd" style="max-width:250px" title="${esc(e.command || '')}">${esc(e.command || '-')}</td>
+          <td>${haikuDecision}</td>
+          <td style="font-size:12px;color:#a1a1aa;max-width:300px">${esc(haikuReason)}</td>
+          <td>${ioHtml}</td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  }
+}
+
+// =============================================
+// Secrets Guard Page
+// =============================================
+function renderSecretsPage() {
+  const serverOnly = document.getElementById('secrets-server-only')?.checked;
+  const blockedOnly = document.getElementById('secrets-blocked-only')?.checked;
+  const container = document.getElementById('secrets-table-body');
+
+  if (serverOnly) {
+    const filtered = serverEvents.filter(SERVER_GUARD.secrets || (() => false));
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">No server send events for secrets guard.</div>';
+      return;
+    }
+    container.innerHTML = `<table><thead><tr><th>Time</th><th>Destination</th><th>Event</th><th>Payload</th></tr></thead><tbody>` +
+      filtered.map((e, i) => {
+        const dest = e.destination === 'posthog' ? '<span class="badge badge-blue">PostHog</span>' : '<span class="badge badge-yellow">Supabase</span>';
+        const payloadStr = JSON.stringify(e.properties || e.payload || {}, null, 2);
+        const uid = 'sec-sv-' + i;
+        return `<tr>
+          <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+          <td>${dest}</td>
+          <td>${esc(e.event || '-')}</td>
+          <td><span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">View payload</span><div class="payload-content" id="${uid}">${esc(payloadStr)}</div></td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  } else {
+    let filtered = localEvents.filter(e => (e.guard === 'env_var' || e.event === 'output_redacted') && e.decision !== 'allow');
+    if (blockedOnly) {
+      filtered = filtered.filter(e => e.decision === 'block' || e.event === 'output_redacted');
+    }
+    // Hide system commands
+    filtered = filtered.filter(e => !e.command || !/^(networksetup|arp|defaults)\b/.test(e.command.trim()));
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">' + (blockedOnly ? 'No blocked/redacted events.' : 'No secrets guard events yet.') + '</div>';
+      return;
+    }
+    container.innerHTML = `<table><thead><tr>
+      <th>Time</th>
+      <th>Decision</th>
+      <th>Type</th>
+      <th>Pattern Matched</th>
+      <th>Vars / Secrets</th>
+      <th>Command</th>
+      <th>Reason</th>
+    </tr></thead><tbody>` +
+      filtered.map((e, i) => {
+        const badgeMap = { block: 'badge-red', redact: 'badge-yellow', log: 'badge-yellow', allow: 'badge-green' };
+        const labelMap = { block: 'Blocked', redact: 'Redacted', log: 'Logged', allow: 'Allowed' };
+        const badge = badgeMap[e.decision] || 'badge-gray';
+        const label = labelMap[e.decision] || (e.decision || '-');
+
+        // Type column
+        const type = e.detail?.type || (e.event === 'output_redacted' ? 'output_redacted' : '-');
+        const typeLabel = { env_dump: 'Env Dump', value_exposed: 'Value Exposed', lang_env_access: 'Lang API', env_ref_logged: 'Env Ref', output_redacted: 'Output Redacted' }[type] || type;
+
+        // Pattern matched
+        const pattern = e.detail?.matched_pattern || (e.detail?.matched_patterns ? e.detail.matched_patterns.join(', ') : (e.detail?.pattern_category || '-'));
+
+        // Vars / secrets
+        const vars = e.detail?.vars || e.detail?.secrets || [];
+        const varsStr = Array.isArray(vars) ? vars.join(', ') : String(vars);
+
+        const uid = 'sec-lc-' + i;
+        const detailObj = e.detail ? JSON.stringify(e.detail, null, 2) : '';
+        const detailHtml = detailObj ? ` <span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">[detail]</span><div class="payload-content" id="${uid}">${esc(detailObj)}</div>` : '';
+
+        return `<tr>
+          <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+          <td><span class="badge ${badge}">${label}</span></td>
+          <td style="font-size:12px"><span class="badge badge-gray">${esc(typeLabel)}</span></td>
+          <td style="font-family:ui-monospace,monospace;font-size:11px;max-width:200px;word-break:break-all">${esc(pattern)}</td>
+          <td style="font-family:ui-monospace,monospace;font-size:12px;color:#facc15;max-width:180px;word-break:break-all">${esc(varsStr)}</td>
+          <td class="cmd" style="max-width:250px" title="${esc(e.command || '')}">${esc(e.command || '-')}</td>
+          <td style="font-size:12px;color:#a1a1aa;max-width:300px">${esc(e.reason || '-')}${detailHtml}</td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  }
+}
+
+// =============================================
+// Exfil Allowlist
+// =============================================
+let exfilAllowlist = { enabled: false, domains: [] };
+
+async function loadExfilAllowlist() {
+  try {
+    const res = await fetch('/api/exfil-allowlist');
+    exfilAllowlist = await res.json();
+  } catch { exfilAllowlist = { enabled: false, domains: [] }; }
+  renderExfilAllowlist();
+}
+
+function renderExfilAllowlist() {
+  const al = exfilAllowlist || { enabled: false, domains: [] };
+  const statusBadge = document.getElementById('exfil-al-status-badge');
+  const toggleBtn = document.getElementById('exfil-al-toggle-btn');
+  const domainsDiv = document.getElementById('exfil-al-domains');
+  if (!statusBadge) return;
+
+  if (al.enabled) {
+    statusBadge.innerHTML = '<span class="badge badge-green">Enabled</span>';
+    toggleBtn.textContent = 'Disable';
+    toggleBtn.style.color = '#facc15';
+    toggleBtn.style.borderColor = 'rgba(250,204,21,0.3)';
+  } else {
+    statusBadge.innerHTML = '<span class="badge badge-gray">Disabled</span>';
+    toggleBtn.textContent = 'Enable';
+    toggleBtn.style.color = '#4ade80';
+    toggleBtn.style.borderColor = 'rgba(34,197,94,0.3)';
+  }
+
+  if (al.domains.length === 0) {
+    domainsDiv.innerHTML = '<div style="font-size:13px;color:#52525b;padding:8px 0">No domains configured.</div>';
+  } else {
+    domainsDiv.innerHTML = al.domains.map(d =>
+      `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 10px;margin:3px 4px 3px 0;font-size:13px;font-family:ui-monospace,monospace">
+        ${esc(d)}
+        <span style="cursor:pointer;color:#a1a1aa;font-size:16px;line-height:1" onclick="removeExfilDomain('${esc(d)}')" title="Remove">&times;</span>
+      </div>`
+    ).join('');
+  }
+}
+
+async function addExfilDomain() {
+  const input = document.getElementById('exfil-al-input');
+  const domain = (input.value || '').trim();
+  if (!domain) return;
+  try {
+    const res = await fetch('/api/exfil-allowlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add', domain }),
+    });
+    const data = await res.json();
+    if (data.allowlist) exfilAllowlist = data.allowlist;
+    input.value = '';
+    renderExfilAllowlist();
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+async function removeExfilDomain(domain) {
+  try {
+    const res = await fetch('/api/exfil-allowlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'remove', domain }),
+    });
+    const data = await res.json();
+    if (data.allowlist) exfilAllowlist = data.allowlist;
+    renderExfilAllowlist();
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+async function toggleExfilAllowlist() {
+  const action = exfilAllowlist.enabled ? 'disable' : 'enable';
+  try {
+    const res = await fetch('/api/exfil-allowlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    const data = await res.json();
+    if (data.allowlist) exfilAllowlist = data.allowlist;
+    renderExfilAllowlist();
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+
+const SYSTEM_COMMANDS = /^(networksetup|arp|defaults)\b/;
+
+function renderGuardPage(guard) {
+  const serverOnly = document.getElementById(guard + '-server-only')?.checked;
+  const blockedOnly = document.getElementById(guard + '-blocked-only')?.checked;
+  const showPassed = document.getElementById(guard + '-show-passed')?.checked;
+  const showSystem = document.getElementById(guard + '-show-system')?.checked;
+  const container = document.getElementById(guard + '-table-body');
+
+  if (serverOnly) {
+    const filtered = serverEvents.filter(SERVER_GUARD[guard] || (() => false));
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">No server send events for this guard.</div>';
+      return;
+    }
+    container.innerHTML = `<table><thead><tr><th>Time</th><th>Destination</th><th>Event</th><th>Payload</th></tr></thead><tbody>` +
+      filtered.map((e, i) => {
+        const dest = e.destination === 'posthog' ? '<span class="badge badge-blue">PostHog</span>' : '<span class="badge badge-yellow">Supabase</span>';
+        const payloadStr = JSON.stringify(e.properties || e.payload || {}, null, 2);
+        const uid = guard + '-sv-' + i;
+        return `<tr>
+          <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+          <td>${dest}</td>
+          <td>${esc(e.event || '-')}</td>
+          <td><span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">View payload</span><div class="payload-content" id="${uid}">${esc(payloadStr)}</div></td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  } else {
+    const guardAllFn = GUARD_EVENTS[guard] || (() => false);
+    const guardBlockedFn = GUARD_BLOCKED[guard] || (() => false);
+    let filtered;
+    if (blockedOnly) {
+      filtered = localEvents.filter(e => guardBlockedFn(e));
+    } else {
+      filtered = localEvents.filter(e => guardAllFn(e));
+    }
+    // Hide system commands (networksetup, arp, defaults) unless checkbox is checked
+    if (!showSystem) {
+      filtered = filtered.filter(e => !e.command || !SYSTEM_COMMANDS.test(e.command.trim()));
+    }
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">' + (blockedOnly ? 'No blocked events for this guard.' : 'No events yet. Events appear when openclaw-secure is active.') + '</div>';
+      return;
+    }
+    const cmdHeader = guard === 'skill' ? 'Skill File' : 'Command';
+    container.innerHTML = `<table><thead><tr><th>Time</th><th>Decision</th><th>${cmdHeader}</th><th>Detail</th></tr></thead><tbody>` +
+      filtered.map((e, i) => {
+        const badgeMap = { block: 'badge-red', scan_flagged: 'badge-red', binary_detected: 'badge-red', redact: 'badge-yellow', log: 'badge-yellow', scanning: 'badge-blue', scan_clean: 'badge-green', allow: 'badge-green', init: 'badge-gray' };
+        const labelMap = { block: 'Blocked', scan_flagged: 'Flagged', binary_detected: 'Binary', redact: 'Redacted', log: 'Logged', scanning: 'Scanning', scan_clean: 'Clean', allow: 'Allowed', init: 'Init' };
+        const badge = badgeMap[e.decision] || 'badge-gray';
+        const label = labelMap[e.decision] || (e.decision || '-');
+        const reason = e.reason ? esc(e.reason) : (e.secrets_count ? `${e.secrets_count} secret(s) redacted` : '');
+        const detailObj = e.detail ? JSON.stringify(e.detail, null, 2) : '';
+        const uid = guard + '-lc-' + i;
+        const detailHtml = reason + (detailObj ? ` <span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">[detail]</span><div class="payload-content" id="${uid}">${esc(detailObj)}</div>` : '');
+        return `<tr>
+          <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+          <td><span class="badge ${badge}">${label}</span></td>
+          <td class="cmd" title="${esc(e.command || '')}">${esc(e.command || '-')}</td>
+          <td style="font-size:12px;color:#a1a1aa;max-width:400px">${detailHtml}</td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  }
+}
+
+function formatTime(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function timeAgo(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  return Math.floor(hrs / 24) + 'd ago';
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// =============================================
+// Secret Scanner
+// =============================================
+let scanData = null; // last scan results from API
+
+async function loadScanStatus() {
+  try {
+    const res = await fetch('/api/scan');
+    const data = await res.json();
+    renderScanStatus(data);
+  } catch (e) {
+    console.error('Failed to load scan status:', e);
+  }
+}
+
+function renderScanStatus(data) {
+  const el = (id) => document.getElementById(id);
+  // TruffleHog status
+  if (el('scan-thog-status')) {
+    el('scan-thog-status').textContent = data.installed ? 'Installed' : 'Not installed';
+    el('scan-thog-status').style.color = data.installed ? '#4ade80' : '#f87171';
+  }
+  // Home page summary + findings table from cache
+  if (data.cached) {
+    const c = data.cached;
+    const verified = (c.findings || []).filter(f => f.verified).length;
+    const total = (c.findings || []).length;
+    const ago = c.scannedAt ? timeAgo(c.scannedAt) : 'Unknown';
+    if (el('scan-last-time')) el('scan-last-time').textContent = ago;
+    if (el('scan-verified')) el('scan-verified').textContent = verified;
+    if (el('scan-total')) el('scan-total').textContent = total;
+    if (el('home-scan-status')) {
+      if (verified > 0) {
+        el('home-scan-status').innerHTML = `<span style="color:#f87171">${verified} live secret${verified > 1 ? 's' : ''} found</span>`;
+      } else if (total > 0) {
+        el('home-scan-status').textContent = `${total} potential finding${total > 1 ? 's' : ''} (none verified)`;
+      } else {
+        el('home-scan-status').innerHTML = '<span style="color:#4ade80">No hardcoded secrets found</span>';
+      }
+    }
+    if (el('home-scan-detail')) {
+      el('home-scan-detail').textContent = `Last scan: ${ago}` + (c.summary ? ` \u00b7 ${c.summary.targetsScanned || 0} directories scanned` : '');
+    }
+    // Populate findings table from cache if no fresh scan data
+    if (!scanData && c.findings && c.findings.length > 0) {
+      scanData = {
+        findings: c.findings.map((f, i) => ({ ...f, index: i })),
+        targets: null,
+        summary: c.summary,
+        fromCache: true, // flag: scrubbing needs a fresh scan
+      };
+      renderScanFindings();
+    }
+  } else {
+    if (el('scan-last-time')) el('scan-last-time').textContent = 'Never';
+    if (el('scan-verified')) el('scan-verified').textContent = '-';
+    if (el('scan-total')) el('scan-total').textContent = '-';
+    if (el('home-scan-status')) el('home-scan-status').textContent = data.installed ? 'No scan data yet. Run a scan from Secret Scanner.' : 'TruffleHog not installed. Install with: brew install trufflehog';
+    if (el('home-scan-detail')) el('home-scan-detail').textContent = '';
+  }
+}
+
+async function runScan() {
+  const btn = document.getElementById('scan-run-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg style="width:14px;height:14px;animation:spin 1s linear infinite" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Scanning...';
+  if (!document.getElementById('spin-style')) {
+    const style = document.createElement('style');
+    style.id = 'spin-style';
+    style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+  }
+  document.getElementById('scan-findings-body').innerHTML = '<div class="empty">Scanning... this may take a minute.</div>';
+  try {
+    const liveOnly = document.getElementById('scan-live-only')?.checked;
+    await fetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ onlyVerified: liveOnly }),
+    });
+    // Scan runs in background on server — poll until done
+    await pollScanResults();
+  } catch (e) {
+    document.getElementById('scan-findings-body').innerHTML = '<div class="empty">Scan request sent. Polling for results...</div>';
+    await pollScanResults();
+  }
+}
+
+async function pollScanResults() {
+  const btn = document.getElementById('scan-run-btn');
+  const maxPolls = 120; // 4 minutes max (2s intervals)
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const res = await fetch('/api/scan');
+      const data = await res.json();
+      if (data.scanning) continue; // still in progress
+      // Scan complete — use fresh results if available
+      if (data.fresh) {
+        scanData = data.fresh;
+        scanData.fromCache = false;
+      } else if (data.cached) {
+        scanData = {
+          findings: (data.cached.findings || []).map((f, i) => ({ ...f, index: i })),
+          targets: null,
+          summary: data.cached.summary,
+          fromCache: true,
+        };
+      }
+      // Update status cards
+      renderScanStatus(data);
+      if (scanData && scanData.targets) {
+        document.getElementById('scan-targets-section').style.display = '';
+        document.getElementById('scan-targets-list').innerHTML = scanData.targets.map(t =>
+          `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;color:#a1a1aa"><span style="color:#4ade80">&#10003;</span> ${esc(t.label)}</div>`
+        ).join('');
+      }
+      renderScanFindings();
+      btn.disabled = false;
+      btn.innerHTML = '<svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Run Scan';
+      return;
+    } catch {}
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Run Scan';
+  document.getElementById('scan-findings-body').innerHTML = '<div class="empty">Scan timed out. Check server logs.</div>';
+}
+
+function renderScanFindings() {
+  const container = document.getElementById('scan-findings-body');
+  const solveBtn = document.getElementById('scan-solve-btn');
+  const selectAllWrap = document.getElementById('scan-select-all-wrap');
+  if (!scanData || !scanData.findings || scanData.findings.length === 0) {
+    container.innerHTML = '<div class="empty">No findings. Your codebase is clean!</div>';
+    solveBtn.style.display = 'none';
+    selectAllWrap.style.display = 'none';
+    return;
+  }
+  const liveOnly = document.getElementById('scan-live-only')?.checked;
+  let findings = scanData.findings;
+  if (liveOnly) findings = findings.filter(f => f.verified);
+  if (findings.length === 0) {
+    container.innerHTML = '<div class="empty">No verified findings. Toggle off "Verified only" to see all.</div>';
+    solveBtn.style.display = 'none';
+    selectAllWrap.style.display = 'none';
+    return;
+  }
+  const hasVerified = findings.some(f => f.verified);
+  solveBtn.style.display = hasVerified ? '' : 'none';
+  selectAllWrap.style.display = hasVerified ? '' : 'none';
+  container.innerHTML = `<table><thead><tr>
+    <th style="width:32px"></th>
+    <th>Detector</th>
+    <th>File</th>
+    <th>Line</th>
+    <th>Status</th>
+    <th>Secret (redacted)</th>
+    <th>Scan Target</th>
+  </tr></thead><tbody>` +
+    findings.map((f, i) => {
+      const verified = f.verified ? '<span class="badge badge-red">LIVE</span>' : '<span class="badge badge-gray">Inactive</span>';
+      const checkDisabled = f.verified ? '' : 'disabled';
+      return `<tr>
+        <td><input type="checkbox" class="scan-check" data-index="${f.index}" ${checkDisabled}></td>
+        <td style="font-weight:500">${esc(f.detectorName)}</td>
+        <td class="cmd" title="${esc(f.file || '')}">${esc(f.file ? f.file.replace(/^\/Users\/[^/]+/, '~') : '-')}</td>
+        <td style="color:#a1a1aa">${f.line || '-'}</td>
+        <td>${verified}</td>
+        <td style="font-family:ui-monospace,monospace;font-size:12px;color:#a1a1aa">${esc(f.raw)}</td>
+        <td style="font-size:12px;color:#a1a1aa">${esc(f.scanTarget || '')}</td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function toggleScanSelectAll() {
+  const checked = document.getElementById('scan-select-all')?.checked;
+  document.querySelectorAll('.scan-check:not(:disabled)').forEach(cb => { cb.checked = checked; });
+}
+
+async function runSolve() {
+  const checks = document.querySelectorAll('.scan-check:checked');
+  const indices = [...checks].map(cb => parseInt(cb.dataset.index));
+  if (indices.length === 0) {
+    alert('No findings selected. Check the boxes next to verified secrets to scrub.');
+    return;
+  }
+  if (!confirm(`Replace ${indices.length} secret(s) in files with dummy values? This cannot be undone.`)) return;
+  const btn = document.getElementById('scan-solve-btn');
+  btn.disabled = true;
+  btn.textContent = 'Scrubbing...';
+  try {
+    const res = await fetch('/api/solve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ indices }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert('Solve error: ' + data.error);
+      return;
+    }
+    // Show results
+    const resultsDiv = document.getElementById('scan-solve-results');
+    const resultsBody = document.getElementById('scan-solve-body');
+    resultsDiv.style.display = '';
+    const succeeded = (data.results || []).filter(r => r.success);
+    const failed = (data.results || []).filter(r => !r.success);
+    resultsBody.innerHTML = `<table><thead><tr><th>Status</th><th>File</th><th>Detector</th><th>Original</th><th>Replaced With</th></tr></thead><tbody>` +
+      (data.results || []).map(r => {
+        const status = r.success ? '<span class="badge badge-green">Replaced</span>' : '<span class="badge badge-red">Failed</span>';
+        return `<tr>
+          <td>${status}</td>
+          <td class="cmd">${esc((r.file || '').replace(/^\/Users\/[^/]+/, '~'))}</td>
+          <td>${esc(r.detectorName || '')}</td>
+          <td style="font-family:ui-monospace,monospace;font-size:12px;color:#a1a1aa">${esc(r.original || r.error || '')}</td>
+          <td style="font-family:ui-monospace,monospace;font-size:12px;color:#4ade80">${esc(r.dummy || '')}</td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+    if (succeeded.length > 0) {
+      resultsBody.innerHTML += `<div style="padding:16px;font-size:13px;color:#a1a1aa">
+        ${succeeded.length} secret(s) replaced with dummy values. Remember to rotate the REAL secrets in their original services.
+      </div>`;
+    }
+    // Clear scan data since files changed
+    scanData = null;
+    document.getElementById('scan-findings-body').innerHTML = '<div class="empty">Scan data cleared after scrub. Run a new scan to verify.</div>';
+    document.getElementById('scan-solve-btn').style.display = 'none';
+    document.getElementById('scan-select-all-wrap').style.display = 'none';
+    // Refresh home summary
+    loadScanStatus();
+  } catch (e) {
+    alert('Solve failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Scrub Selected';
+  }
+}
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
+
+

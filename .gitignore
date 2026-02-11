@@ -1,0 +1,14 @@
+**/__pycache__/
+**/*.pyc
+monitor/.install_id
+monitor/.skill_scan_cache.json
+monitor/.secrets_scan_cache.json
+monitor/.scan_patterns_cache.json
+monitor/secrets_guard/.trufflehog-exclude
+command-stream.jsonl
+spawn-audit.jsonl
+spawn-gate.log
+*.log
+supabase/.temp/
+.claude/
+node_modules/

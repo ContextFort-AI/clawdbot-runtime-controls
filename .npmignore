@@ -1,0 +1,17 @@
+**/__pycache__/
+**/*.pyc
+monitor/.install_id
+monitor/.skill_scan_cache.json
+monitor/.secrets_scan_cache.json
+monitor/.scan_patterns_cache.json
+monitor/secrets_guard/.trufflehog-exclude
+monitor/requirements.txt
+**/test_*.js
+command-stream.jsonl
+spawn-audit.jsonl
+spawn-gate.log
+*.log
+supabase/
+.claude/
+.git/
+node_modules/

@@ -1,0 +1,97 @@
+# Subset of Unicode confusable characters relevant to URL security
+# Format: confusable_codepoint target_codepoint # comment
+# Based on Unicode TR39 confusables.txt
+# Cyrillic -> Latin
+0430 0061 # а -> a
+0435 0065 # е -> e
+043E 006F # о -> o
+0440 0070 # р -> p
+0441 0063 # с -> c
+0443 0079 # у -> y
+0445 0078 # х -> x
+0456 0069 # і -> i
+0458 006A # ј -> j
+04BB 0068 # һ -> h
+0410 0041 # А -> A
+0412 0042 # В -> B
+0415 0045 # Е -> E
+041A 004B # К -> K
+041C 004D # М -> M
+041D 0048 # Н -> H
+041E 004F # О -> O
+0420 0050 # Р -> P
+0421 0043 # С -> C
+0422 0054 # Т -> T
+0425 0058 # Х -> X
+# Greek -> Latin
+03B1 0061 # α -> a
+03B5 0065 # ε -> e
+03B9 0069 # ι -> i
+03BF 006F # ο -> o
+03C1 0070 # ρ -> p
+03C5 0075 # υ -> u
+03C7 0078 # χ -> x
+# Fullwidth Latin
+FF21 0041 # Ａ -> A
+FF22 0042 # Ｂ -> B
+FF23 0043 # Ｃ -> C
+FF24 0044 # Ｄ -> D
+FF25 0045 # Ｅ -> E
+FF26 0046 # Ｆ -> F
+FF27 0047 # Ｇ -> G
+FF28 0048 # Ｈ -> H
+FF29 0049 # Ｉ -> I
+FF2A 004A # Ｊ -> J
+FF2B 004B # Ｋ -> K
+FF2C 004C # Ｌ -> L
+FF2D 004D # Ｍ -> M
+FF2E 004E # Ｎ -> N
+FF2F 004F # Ｏ -> O
+FF30 0050 # Ｐ -> P
+FF31 0051 # Ｑ -> Q
+FF32 0052 # Ｒ -> R
+FF33 0053 # Ｓ -> S
+FF34 0054 # Ｔ -> T
+FF35 0055 # Ｕ -> U
+FF36 0056 # Ｖ -> V
+FF37 0057 # Ｗ -> W
+FF38 0058 # Ｘ -> X
+FF39 0059 # Ｙ -> Y
+FF3A 005A # Ｚ -> Z
+FF41 0061 # ａ -> a
+FF42 0062 # ｂ -> b
+FF43 0063 # ｃ -> c
+FF44 0064 # ｄ -> d
+FF45 0065 # ｅ -> e
+FF46 0066 # ｆ -> f
+FF47 0067 # ｇ -> g
+FF48 0068 # ｈ -> h
+FF49 0069 # ｉ -> i
+FF4A 006A # ｊ -> j
+FF4B 006B # ｋ -> k
+FF4C 006C # ｌ -> l
+FF4D 006D # ｍ -> m
+FF4E 006E # ｎ -> n
+FF4F 006F # ｏ -> o
+FF50 0070 # ｐ -> p
+FF51 0071 # ｑ -> q
+FF52 0072 # ｒ -> r
+FF53 0073 # ｓ -> s
+FF54 0074 # ｔ -> t
+FF55 0075 # ｕ -> u
+FF56 0076 # ｖ -> v
+FF57 0077 # ｗ -> w
+FF58 0078 # ｘ -> x
+FF59 0079 # ｙ -> y
+FF5A 007A # ｚ -> z
+# Common lookalikes
+0131 006C # ı -> l (dotless i looks like l)
+0269 0069 # ɩ -> i
+026A 0069 # ɪ -> i
+1D00 0041 # ᴀ -> A (small cap)
+029F 004C # ʟ -> L
+0280 0052 # ʀ -> R
+# Dot variants
+FF0E 002E # ． -> . (fullwidth dot)
+3002 002E # 。 -> . (ideographic period)
+FF61 002E # ｡ -> . (halfwidth ideographic period)

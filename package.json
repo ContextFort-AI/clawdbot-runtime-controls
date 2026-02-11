@@ -1,0 +1,19 @@
+{
+  "name": "@contextfort-ai/openclaw-secure",
+  "version": "0.1.9",
+  "description": "Runtime security guard for OpenClaw — blocks malicious commands before they execute",
+  "bin": {
+    "openclaw-secure": "./bin/openclaw-secure.js"
+  },
+  "scripts": {
+    "postinstall": "node -e \"console.log('\\n\\x1b[32m✓ openclaw-secure installed!\\x1b[0m\\n\\nGet your API key at https://contextfort.ai/login and run:\\n\\n  openclaw-secure set-key <your-key>\\n  openclaw-secure enable\\n')\""
+  },
+  "keywords": [
+    "openclaw",
+    "security",
+    "runtime",
+    "guard",
+    "prompt-injection"
+  ],
+  "license": "MIT"
+}
