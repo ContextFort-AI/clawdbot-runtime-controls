@@ -126,8 +126,6 @@ module.exports = function startDashboard({ port = 9009 } = {}) {
 
   function apiScanResults(res) {
     const installed = secretsGuard.isTrufflehogInstalled();
-    const cached = secretsGuard.loadScanCache();
-    // If lastScanResult is in memory, return sanitized version (enables scrubbing)
     let freshFindings = null;
     if (lastScanResult && lastScanResult.findings) {
       freshFindings = {
@@ -144,55 +142,56 @@ module.exports = function startDashboard({ port = 9009 } = {}) {
         })),
       };
     }
-    json(res, { installed, cached, scanning: scanInProgress, fresh: freshFindings });
+    json(res, { installed, scanning: scanInProgress, fresh: freshFindings });
   }
 
-  let scanInProgress = false;
+  let scanInProgress = true; // starts true — auto-scan kicks off on server start
+  let currentWorker = null;
+
+  function startScan() {
+    // Kill any running scan
+    if (currentWorker) {
+      try { currentWorker.kill(); } catch {}
+      currentWorker = null;
+    }
+
+    const { fork } = require('child_process');
+    const worker = fork(path.join(__dirname, 'scan-worker.js'), [], {
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+    });
+
+    currentWorker = worker;
+    scanInProgress = true;
+
+    worker.send({ onlyVerified: true, cwd: process.cwd() });
+
+    worker.on('message', (msg) => {
+      scanInProgress = false;
+      currentWorker = null;
+      if (msg.type === 'result') {
+        lastScanResult = msg.data;
+      }
+    });
+
+    worker.on('error', () => { scanInProgress = false; currentWorker = null; });
+    worker.on('exit', () => { scanInProgress = false; currentWorker = null; });
+
+    // Safety timeout — 5 minutes
+    setTimeout(() => {
+      if (scanInProgress && currentWorker === worker) {
+        scanInProgress = false;
+        currentWorker = null;
+        try { worker.kill(); } catch {}
+      }
+    }, 300000);
+  }
 
   function apiRunScan(req, res) {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', () => {
-      if (scanInProgress) {
-        json(res, { status: 'scanning' });
-        return;
-      }
-      try {
-        const opts = body ? JSON.parse(body) : {};
-        const onlyVerified = opts.onlyVerified !== false;
-
-        // Fork a worker to run TruffleHog without blocking the event loop
-        const { fork } = require('child_process');
-        const worker = fork(path.join(__dirname, 'scan-worker.js'), [], {
-          stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-        });
-
-        scanInProgress = true;
-        json(res, { status: 'scanning' });
-
-        worker.send({ onlyVerified, cwd: process.cwd() });
-
-        worker.on('message', (msg) => {
-          scanInProgress = false;
-          if (msg.type === 'result') {
-            lastScanResult = msg.data;
-          }
-        });
-
-        worker.on('error', () => { scanInProgress = false; });
-        worker.on('exit', () => { scanInProgress = false; });
-
-        // Safety timeout — 5 minutes
-        setTimeout(() => {
-          if (scanInProgress) {
-            scanInProgress = false;
-            try { worker.kill(); } catch {}
-          }
-        }, 300000);
-      } catch (e) {
-        scanInProgress = false;
-        // Response already sent, can't send error
-      }
+      startScan();
+      json(res, { status: 'scanning' });
     });
   }
 
@@ -202,10 +201,10 @@ module.exports = function startDashboard({ port = 9009 } = {}) {
     req.on('end', () => {
       try {
         const { indices } = JSON.parse(body);
-        // Auto-scan if no fresh results in memory
         if (!lastScanResult || !lastScanResult.findings) {
-          const result = secretsGuard.scan(process.cwd(), { onlyVerified: true });
-          lastScanResult = result;
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'No scan data. Wait for the auto-scan to complete or run a scan first.' }));
+          return;
         }
         const selectedFindings = (indices || [])
           .filter(i => i >= 0 && i < lastScanResult.findings.length)
@@ -353,9 +352,18 @@ module.exports = function startDashboard({ port = 9009 } = {}) {
     throw err;
   });
 
+  // Auto-scan on startup — same as clicking "Run Scan"
+  function autoScan() {
+    if (!secretsGuard.isTrufflehogInstalled()) return;
+    startScan();
+  }
+
   server.listen(port, '127.0.0.1', () => {
     console.log(`\n  ContextFort Security Dashboard`);
     console.log(`  http://localhost:${port}`);
+
+    // Kick off auto-scan
+    autoScan();
 
     // Try to start a cloudflared quick tunnel
     server._tunnel = null;

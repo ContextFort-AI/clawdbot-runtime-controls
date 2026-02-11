@@ -311,8 +311,7 @@
             <svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             Run Scan
           </button>
-          <label class="check-label"><input type="checkbox" id="scan-live-only" checked onchange="renderScanFindings()"> Show only LIVE keys</label>
-          <button class="btn" id="scan-solve-btn" onclick="runSolve()" style="display:none">
+<button class="btn" id="scan-solve-btn" onclick="runSolve()" style="display:none">
             <svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Scrub Selected
           </button>
@@ -1261,15 +1260,15 @@ function renderScanStatus(data) {
   const el = (id) => document.getElementById(id);
   // TruffleHog status
   if (el('scan-thog-status')) {
-    el('scan-thog-status').textContent = data.installed ? 'Installed' : 'Not installed';
+    el('scan-thog-status').innerHTML = data.installed ? 'Installed' : 'Not installed<div style="font-size:11px;color:#a1a1aa;margin-top:4px">Run: <code style="background:#27272a;padding:2px 6px;border-radius:4px">brew install trufflehog</code></div>';
     el('scan-thog-status').style.color = data.installed ? '#4ade80' : '#f87171';
   }
-  // Home page summary + findings table from cache
-  if (data.cached) {
-    const c = data.cached;
-    const verified = (c.findings || []).filter(f => f.verified).length;
-    const total = (c.findings || []).length;
-    const ago = c.scannedAt ? timeAgo(c.scannedAt) : 'Unknown';
+  // Home page summary + findings from fresh scan data
+  if (data.fresh) {
+    const f = data.fresh;
+    const verified = (f.findings || []).filter(x => x.verified).length;
+    const total = (f.findings || []).length;
+    const ago = f.summary && f.summary.scannedAt ? timeAgo(f.summary.scannedAt) : 'Just now';
     if (el('scan-last-time')) el('scan-last-time').textContent = ago;
     if (el('scan-verified')) el('scan-verified').textContent = verified;
     if (el('scan-total')) el('scan-total').textContent = total;
@@ -1283,23 +1282,32 @@ function renderScanStatus(data) {
       }
     }
     if (el('home-scan-detail')) {
-      el('home-scan-detail').textContent = `Last scan: ${ago}` + (c.summary ? ` \u00b7 ${c.summary.targetsScanned || 0} directories scanned` : '');
+      el('home-scan-detail').textContent = `Last scan: ${ago}` + (f.summary ? ` · ${f.summary.targetsScanned || 0} directories scanned` : '');
     }
-    // Populate findings table from cache if no fresh scan data
-    if (!scanData && c.findings && c.findings.length > 0) {
-      scanData = {
-        findings: c.findings.map((f, i) => ({ ...f, index: i })),
-        targets: null,
-        summary: c.summary,
-        fromCache: true, // flag: scrubbing needs a fresh scan
-      };
+    // Reset Run Scan button
+    if (el('scan-run-btn')) { el('scan-run-btn').disabled = false; el('scan-run-btn').innerHTML = '<svg style="width:14px;height:14px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Run Scan'; }
+    // Populate findings table if not already set by a manual scan
+    if (!scanData) {
+      scanData = f;
       renderScanFindings();
     }
+  } else if (data.scanning) {
+    if (el('scan-last-time')) el('scan-last-time').textContent = 'Scanning...';
+    if (el('scan-verified')) el('scan-verified').textContent = '-';
+    if (el('scan-total')) el('scan-total').textContent = '-';
+    if (el('home-scan-status')) el('home-scan-status').textContent = 'Scanning directories for secrets...';
+    if (el('home-scan-detail')) el('home-scan-detail').textContent = '';
+    // Update scan page too
+    if (el('scan-findings-body')) el('scan-findings-body').innerHTML = '<div class="empty">Scanning... this may take a minute.</div>';
+    if (el('scan-run-btn')) { el('scan-run-btn').disabled = true; el('scan-run-btn').innerHTML = '<svg style="width:14px;height:14px;animation:spin 1s linear infinite" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Scanning...'; }
+    if (!document.getElementById('spin-style')) { const style = document.createElement('style'); style.id = 'spin-style'; style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }'; document.head.appendChild(style); }
+    if (el('scan-solve-btn')) el('scan-solve-btn').style.display = 'none';
+    if (el('scan-select-all-wrap')) el('scan-select-all-wrap').style.display = 'none';
   } else {
     if (el('scan-last-time')) el('scan-last-time').textContent = 'Never';
     if (el('scan-verified')) el('scan-verified').textContent = '-';
     if (el('scan-total')) el('scan-total').textContent = '-';
-    if (el('home-scan-status')) el('home-scan-status').textContent = data.installed ? 'No scan data yet. Run a scan from Secret Scanner.' : 'TruffleHog not installed. Install with: brew install trufflehog';
+    if (el('home-scan-status')) el('home-scan-status').textContent = data.installed ? 'No scan data yet. Scan starting...' : 'TruffleHog not installed. Install with: brew install trufflehog';
     if (el('home-scan-detail')) el('home-scan-detail').textContent = '';
   }
 }
@@ -1316,12 +1324,7 @@ async function runScan() {
   }
   document.getElementById('scan-findings-body').innerHTML = '<div class="empty">Scanning... this may take a minute.</div>';
   try {
-    const liveOnly = document.getElementById('scan-live-only')?.checked;
-    await fetch('/api/scan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ onlyVerified: liveOnly }),
-    });
+    await fetch('/api/scan', { method: 'POST' });
     // Scan runs in background on server — poll until done
     await pollScanResults();
   } catch (e) {
@@ -1342,14 +1345,6 @@ async function pollScanResults() {
       // Scan complete — use fresh results if available
       if (data.fresh) {
         scanData = data.fresh;
-        scanData.fromCache = false;
-      } else if (data.cached) {
-        scanData = {
-          findings: (data.cached.findings || []).map((f, i) => ({ ...f, index: i })),
-          targets: null,
-          summary: data.cached.summary,
-          fromCache: true,
-        };
       }
       // Update status cards
       renderScanStatus(data);
@@ -1380,15 +1375,7 @@ function renderScanFindings() {
     selectAllWrap.style.display = 'none';
     return;
   }
-  const liveOnly = document.getElementById('scan-live-only')?.checked;
-  let findings = scanData.findings;
-  if (liveOnly) findings = findings.filter(f => f.verified);
-  if (findings.length === 0) {
-    container.innerHTML = '<div class="empty">No verified findings. Toggle off "Verified only" to see all.</div>';
-    solveBtn.style.display = 'none';
-    selectAllWrap.style.display = 'none';
-    return;
-  }
+  const findings = scanData.findings;
   const hasVerified = findings.some(f => f.verified);
   solveBtn.style.display = hasVerified ? '' : 'none';
   selectAllWrap.style.display = hasVerified ? '' : 'none';

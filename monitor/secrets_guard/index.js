@@ -5,7 +5,6 @@ const fs = require('fs');
 const os = require('os');
 
 const HOME = os.homedir();
-const CACHE_FILE_NAME = '.secrets_scan_cache.json';
 
 /**
  * Secrets Guard — scans all directories OpenClaw can read for hardcoded secrets
@@ -17,10 +16,6 @@ const CACHE_FILE_NAME = '.secrets_scan_cache.json';
  */
 module.exports = function createSecretsGuard({ spawnSync, baseDir, analytics }) {
   const track = analytics ? analytics.track.bind(analytics) : () => {};
-  const CACHE_FILE = path.join(baseDir, 'monitor', CACHE_FILE_NAME);
-
-  // Cached scan results: { path: string, findings: array, scannedAt: string }[]
-  let lastScanResults = [];
   let trufflehogAvailable = null; // null = unknown, true/false after check
 
   /**
@@ -241,9 +236,6 @@ module.exports = function createSecretsGuard({ spawnSync, baseDir, analytics }) 
       },
     };
 
-    // Cache results
-    lastScanResults = deduped;
-    saveScanCache(result);
     track('secrets_scan_complete', {
       targets_scanned: targets.length,
       total_findings: deduped.length,
@@ -300,38 +292,6 @@ module.exports = function createSecretsGuard({ spawnSync, baseDir, analytics }) 
 
     lines.push('');
     return lines.join('\n');
-  }
-
-  /**
-   * Save scan cache to disk
-   */
-  function saveScanCache(result) {
-    try {
-      const data = {
-        scannedAt: result.summary.scannedAt,
-        summary: result.summary,
-        findings: result.findings.map(f => ({
-          detectorName: f.detectorName,
-          verified: f.verified,
-          raw: f.raw, // redacted already
-          file: f.file,
-          scanTarget: f.scanTarget,
-        })),
-      };
-      fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2) + '\n');
-    } catch {}
-  }
-
-  /**
-   * Load last scan results from cache
-   */
-  function loadScanCache() {
-    try {
-      const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-      return data;
-    } catch {
-      return null;
-    }
   }
 
   // =============================================
@@ -928,7 +888,6 @@ Do NOT attempt workarounds. Do NOT use alternative commands to read these values
     scanDirectory,
     getScanTargets,
     formatResults,
-    loadScanCache,
     isTrufflehogInstalled,
     solve,
     formatSolveResults,

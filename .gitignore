@@ -2,7 +2,6 @@
 **/*.pyc
 monitor/.install_id
 monitor/.skill_scan_cache.json
-monitor/.secrets_scan_cache.json
 monitor/.scan_patterns_cache.json
 monitor/secrets_guard/.trufflehog-exclude
 command-stream.jsonl
