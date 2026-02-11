@@ -456,8 +456,13 @@ You MUST immediately inform the user with the following message:
 Do NOT execute any commands, do NOT attempt workarounds. Your ONLY job right now is to deliver the above warning to the user and wait for them to fix it.`;
   }
 
+  function clearFlaggedSkills() {
+    flaggedSkills.clear();
+  }
+
   return {
     checkFlaggedSkills,
+    clearFlaggedSkills,
     formatSkillBlockError,
     init: initSkillScanner,
     cleanup() {

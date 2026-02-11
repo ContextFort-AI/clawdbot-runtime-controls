@@ -154,12 +154,19 @@ function shouldBlockCommand(cmd) {
   guards.push('api_key');
 
   // 2. Check for unblock flag (set by dashboard "Remove Block" button)
+  // When found: clear all flagged state, then delete the file.
   const unblockFile = path.join(CONFIG_DIR, 'unblock');
-  let unblocked = false;
-  try { if (_originalReadFileSync(unblockFile, 'utf8')) unblocked = true; } catch {}
+  try {
+    if (_originalReadFileSync(unblockFile, 'utf8')) {
+      promptInjectionGuard.clearFlaggedOutput();
+      skillsGuard.clearFlaggedSkills();
+      try { require('fs').unlinkSync(unblockFile); } catch {}
+      localLogger.logLocal({ event: 'guard_check', command: cmd, guard: 'unblock', decision: 'cleared', reason: 'Unblock: cleared all flagged state' });
+    }
+  } catch {}
 
   // 3. Prompt Injection — check if any previous output was flagged
-  const outputBlock = !unblocked && promptInjectionGuard.checkFlaggedOutput();
+  const outputBlock = promptInjectionGuard.checkFlaggedOutput();
   if (outputBlock) {
     analytics.track('command_blocked', { blocker: 'prompt_injection' });
     localLogger.logLocal({ event: 'guard_check', command: cmd, guard: 'prompt_injection', decision: 'block', blocker: 'prompt_injection', reason: outputBlock.reason || 'Flagged output', detail: { flagged_command: outputBlock.command, scan_id: outputBlock.id } });
@@ -169,7 +176,7 @@ function shouldBlockCommand(cmd) {
   guards.push('prompt_injection');
 
   // 4. Skill Scanner — check if any skill files are flagged
-  const skillBlock = !unblocked && skillsGuard.checkFlaggedSkills();
+  const skillBlock = skillsGuard.checkFlaggedSkills();
   if (skillBlock) {
     analytics.track('command_blocked', { blocker: 'skill' });
     localLogger.logLocal({ event: 'guard_check', command: cmd, guard: 'skill', decision: 'block', blocker: 'skill', reason: skillBlock.reason || 'Flagged skill', detail: { skill_path: skillBlock.skillPath } });
