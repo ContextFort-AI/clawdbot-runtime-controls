@@ -1,6 +1,6 @@
 {
   "name": "@contextfort-ai/openclaw-secure",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Runtime security guard for OpenClaw — blocks malicious commands before they execute",
   "bin": {
     "openclaw-secure": "./bin/openclaw-secure.js"
