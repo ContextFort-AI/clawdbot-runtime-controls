@@ -101,12 +101,17 @@ module.exports = function startDashboard({ port = 9009 } = {}) {
     const exfilDetections = events.filter(e => e.event === 'guard_check' && e.guard === 'exfil').length;
     const secretsLeaked = events.filter(e => e.event === 'guard_check' && e.guard === 'secrets_leak').length;
 
+    const sandboxScrubs = events.filter(e => e.guard === 'sandbox' && e.decision === 'env_scrubbed').length;
+    const sandboxFsBlocks = events.filter(e => e.guard === 'sandbox' && e.decision === 'fs_blocked').length;
+    const sandboxNetLogs = events.filter(e => e.guard === 'sandbox' && e.decision === 'network_logged').length;
+
     const guardStatus = {
       skill_scanner: { blocks: byGuard.skill || 0, active: true },
       bash_guard: { blocks: byGuard.tirith || 0, active: true },
       prompt_injection: { blocks: byGuard.prompt_injection || 0, active: true },
       secrets_guard: { blocks: (byGuard.env_var || 0), redactions: redacted, leaks: secretsLeaked, active: true },
       exfil_monitor: { detections: exfilDetections, active: true },
+      plugin_sandbox: { scrubs: sandboxScrubs, fs_blocks: sandboxFsBlocks, net_logs: sandboxNetLogs, active: true },
     };
 
     json(res, { total, blocked, allowed, redacted, byGuard, guardStatus, activeSince });

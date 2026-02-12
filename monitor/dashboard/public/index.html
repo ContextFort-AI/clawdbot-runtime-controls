@@ -48,7 +48,7 @@
     .card-sub { font-size: 12px; color: #a1a1aa; margin-top: 4px; }
 
     /* Guard summary cards on home */
-    .guard-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+    .guard-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
     .guard-card { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 16px; background: rgba(255,255,255,0.02); cursor: pointer; transition: all 0.15s; }
     .guard-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); }
     .guard-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -180,6 +180,11 @@
           Secrets Exfil Monitor
           <span class="dot dot-green" id="sb-exfil-dot" style="margin-left:auto"></span>
         </button>
+        <button class="sidebar-btn" data-page="sandbox" onclick="switchPage('sandbox')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M12 2v20"/><path d="M2 12h20"/></svg>
+          Plugin Sandbox
+          <span class="dot dot-green" id="sb-sandbox-dot" style="margin-left:auto"></span>
+        </button>
       </div>
     </aside>
 
@@ -271,6 +276,14 @@
               <span class="dot dot-green" id="g-exfil-dot" style="margin-left:auto"></span>
             </div>
             <div class="guard-stat"><b id="g-exfil-detections">0</b> detections</div>
+          </div>
+          <div class="guard-card" onclick="switchPage('sandbox')">
+            <div class="guard-card-header">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M12 2v20"/><path d="M2 12h20"/></svg>
+              <span>Plugin Sandbox</span>
+              <span class="dot dot-green" id="g-sandbox-dot" style="margin-left:auto"></span>
+            </div>
+            <div class="guard-stat"><b id="g-sandbox-scrubs">0</b> env scrubs &middot; <b id="g-sandbox-fs">0</b> FS blocks &middot; <b id="g-sandbox-net">0</b> net logs</div>
           </div>
         </div>
 
@@ -480,6 +493,36 @@
         </div>
       </div>
 
+      <!-- PLUGIN SANDBOX PAGE -->
+      <div id="page-sandbox" style="display:none">
+        <div class="page-header">
+          <h1>Plugin Sandbox</h1>
+          <p>Runtime isolation for MCP plugin processes: env scrubbing, FS blocklist, and network logging.</p>
+        </div>
+
+        <div class="cards" style="margin-bottom:24px">
+          <div class="card"><div class="card-label">Env Scrubs</div><div class="card-value" id="sandbox-scrubs-count" style="color:#60a5fa">0</div><div class="card-sub">plugin spawns with env stripped</div></div>
+          <div class="card"><div class="card-label">FS Blocks</div><div class="card-value" id="sandbox-fs-count" style="color:#f87171">0</div><div class="card-sub">blocked reads to sensitive dirs</div></div>
+          <div class="card"><div class="card-label">Network Requests</div><div class="card-value" id="sandbox-net-count">0</div><div class="card-sub">outbound connections logged</div></div>
+          <div class="card"><div class="card-label">Sandbox Active</div><div class="card-value" id="sandbox-active-status" style="font-size:16px;color:#4ade80">Ready</div><div class="card-sub">activates on plugin spawn</div></div>
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-header">
+            <h3>Events</h3>
+            <div class="filter-row">
+              <select id="sandbox-filter" onchange="renderSandboxPage()">
+                <option value="all">All events</option>
+                <option value="env_scrubbed">Env Scrubs</option>
+                <option value="fs_blocked">FS Blocks</option>
+                <option value="network_logged">Network Requests</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-body" id="sandbox-table-body"></div>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -525,7 +568,7 @@ function setDays(d) {
 function switchPage(page) {
   currentPage = page;
   document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
-  ['home','scan','skill','bash','pi','secrets','exfil'].forEach(p => {
+  ['home','scan','skill','bash','pi','secrets','exfil','sandbox'].forEach(p => {
     document.getElementById('page-' + p).style.display = p === page ? '' : 'none';
   });
   if (page === 'scan') loadScanStatus();
@@ -533,6 +576,7 @@ function switchPage(page) {
   else if (page === 'pi') renderPiPage();
   else if (page === 'secrets') renderSecretsPage();
   else if (page === 'exfil') { loadExfilAllowlist(); renderGuardPage('exfil'); }
+  else if (page === 'sandbox') renderSandboxPage();
   else if (page !== 'home') renderGuardPage(page);
 }
 
@@ -555,6 +599,7 @@ async function refresh() {
     else if (currentPage === 'pi') renderPiPage();
     else if (currentPage === 'secrets') renderSecretsPage();
     else if (currentPage === 'exfil') { loadExfilAllowlist(); renderGuardPage('exfil'); }
+    else if (currentPage === 'sandbox') renderSandboxPage();
     else if (currentPage !== 'home') renderGuardPage(currentPage);
     loadScanStatus(); // always update home scan summary
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
@@ -577,6 +622,9 @@ function renderOverview(ov) {
   document.getElementById('g-sec-blocks').textContent = gs.secrets_guard?.blocks || 0;
   document.getElementById('g-sec-redactions').textContent = gs.secrets_guard?.redactions || 0;
   document.getElementById('g-exfil-detections').textContent = gs.exfil_monitor?.detections || 0;
+  document.getElementById('g-sandbox-scrubs').textContent = gs.plugin_sandbox?.scrubs || 0;
+  document.getElementById('g-sandbox-fs').textContent = gs.plugin_sandbox?.fs_blocks || 0;
+  document.getElementById('g-sandbox-net').textContent = gs.plugin_sandbox?.net_logs || 0;
 
   const hasData = ov.total > 0;
   setDot('g-skill-dot', hasData, gs.skill_scanner?.blocks > 0);
@@ -584,6 +632,7 @@ function renderOverview(ov) {
   setDot('g-pi-dot', hasData, gs.prompt_injection?.blocks > 0);
   setDot('g-sec-dot', hasData, (gs.secrets_guard?.blocks > 0) || (gs.secrets_guard?.redactions > 0));
   setDot('g-exfil-dot', hasData, gs.exfil_monitor?.detections > 0, 'dot-yellow');
+  setDot('g-sandbox-dot', hasData, (gs.plugin_sandbox?.fs_blocks > 0), 'dot-yellow');
 }
 
 function renderSidebarDots(ov) {
@@ -594,6 +643,7 @@ function renderSidebarDots(ov) {
   setDot('sb-pi-dot', hasData, gs.prompt_injection?.blocks > 0);
   setDot('sb-sec-dot', hasData, (gs.secrets_guard?.blocks > 0) || (gs.secrets_guard?.redactions > 0));
   setDot('sb-exfil-dot', hasData, gs.exfil_monitor?.detections > 0, 'dot-yellow');
+  setDot('sb-sandbox-dot', hasData, (gs.plugin_sandbox?.fs_blocks > 0), 'dot-yellow');
 }
 
 function setDot(id, hasData, hasBlocks, activeClass) {
@@ -1169,6 +1219,60 @@ async function toggleExfilAllowlist() {
     if (data.allowlist) exfilAllowlist = data.allowlist;
     renderExfilAllowlist();
   } catch (e) { alert('Failed: ' + e.message); }
+}
+
+// =============================================
+// Plugin Sandbox Page
+// =============================================
+function renderSandboxPage() {
+  const filter = document.getElementById('sandbox-filter')?.value || 'all';
+  const container = document.getElementById('sandbox-table-body');
+
+  const sandboxEvents = localEvents.filter(e => e.guard === 'sandbox');
+  const scrubs = sandboxEvents.filter(e => e.decision === 'env_scrubbed');
+  const fsBlocks = sandboxEvents.filter(e => e.decision === 'fs_blocked');
+  const netLogs = sandboxEvents.filter(e => e.decision === 'network_logged');
+
+  // Update stat cards
+  const el = (id) => document.getElementById(id);
+  if (el('sandbox-scrubs-count')) el('sandbox-scrubs-count').textContent = scrubs.length;
+  if (el('sandbox-fs-count')) el('sandbox-fs-count').textContent = fsBlocks.length;
+  if (el('sandbox-net-count')) el('sandbox-net-count').textContent = netLogs.length;
+
+  let filtered = sandboxEvents;
+  if (filter === 'env_scrubbed') filtered = scrubs;
+  else if (filter === 'fs_blocked') filtered = fsBlocks;
+  else if (filter === 'network_logged') filtered = netLogs;
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty">No sandbox events yet. Events appear when plugin MCP servers are spawned.</div>';
+    return;
+  }
+
+  container.innerHTML = `<table><thead><tr>
+    <th>Time</th>
+    <th>Type</th>
+    <th>Detail</th>
+    <th>Extra</th>
+  </tr></thead><tbody>` +
+    filtered.map((e, i) => {
+      const badgeMap = { env_scrubbed: 'badge-blue', fs_blocked: 'badge-red', network_logged: 'badge-yellow' };
+      const labelMap = { env_scrubbed: 'Env Scrub', fs_blocked: 'FS Block', network_logged: 'Network' };
+      const badge = badgeMap[e.decision] || 'badge-gray';
+      const label = labelMap[e.decision] || e.decision;
+
+      let detail = esc(e.reason || '-');
+      const uid = 'sandbox-lc-' + i;
+      const detailObj = e.detail ? JSON.stringify(e.detail, null, 2) : '';
+      const detailHtml = detailObj ? `<span class="payload-toggle" onclick="document.getElementById('${uid}').classList.toggle('open')">[detail]</span><div class="payload-content" id="${uid}">${esc(detailObj)}</div>` : '';
+
+      return `<tr>
+        <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
+        <td><span class="badge ${badge}">${label}</span></td>
+        <td style="font-size:12px;color:#a1a1aa;max-width:400px">${detail}</td>
+        <td style="font-size:12px;color:#a1a1aa;max-width:300px">${detailHtml}</td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
 }
 
 const SYSTEM_COMMANDS = /^(networksetup|arp|defaults)\b/;

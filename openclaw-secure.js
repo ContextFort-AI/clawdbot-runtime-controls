@@ -79,6 +79,12 @@ const exfilGuard = require('./monitor/exfil_guard')({
   readFileSync: _originalReadFileSync,
 });
 
+// === Plugin Sandbox Guard ===
+const pluginGuard = require('./monitor/plugin_guard')({
+  localLogger,
+  analytics,
+});
+
 // === Prompt Injection Guard (PostToolUse) ===
 function loadAnthropicKey() {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
@@ -288,6 +294,15 @@ function hookAllSpawnMethods(cp) {
   if (cp.spawn && !cp.spawn.__hooked) {
     const orig = cp.spawn;
     cp.spawn = function(command, args, options) {
+      // Plugin sandbox: scrub env before spawning plugin processes
+      // Only scrub from the parent (non-sandboxed) process — if we're already
+      // sandboxed, the env is already minimal and the plugin may have added
+      // its own vars (e.g. CAMOFOX_PORT) that must be preserved.
+      if (!pluginGuard.isSandboxed() && pluginGuard.isPluginSpawn(command, args)) {
+        if (!options || typeof options !== 'object') options = {};
+        options.env = pluginGuard.scrubEnvForPlugin(options.env || process.env);
+        arguments[2] = options;
+      }
       const shellCmd = extractShellCommand(command, args);
       if (shellCmd) {
         const block = shouldBlockCommand(shellCmd);
@@ -320,6 +335,12 @@ function hookAllSpawnMethods(cp) {
   if (cp.spawnSync && !cp.spawnSync.__hooked) {
     const orig = cp.spawnSync;
     cp.spawnSync = function(command, args, options) {
+      // Plugin sandbox: scrub env before spawning plugin processes (same guard as spawn)
+      if (!pluginGuard.isSandboxed() && pluginGuard.isPluginSpawn(command, args)) {
+        if (!options || typeof options !== 'object') options = {};
+        options.env = pluginGuard.scrubEnvForPlugin(options.env || process.env);
+        arguments[2] = options;
+      }
       const shellCmd = extractShellCommand(command, args);
       if (shellCmd) {
         const block = shouldBlockCommand(shellCmd);
@@ -488,14 +509,18 @@ function hookAllSpawnMethods(cp) {
 // === fs hooks ===
 
 function hookFsMethods(fsModule) {
-  if (fsModule.readFileSync && !fsModule.readFileSync.__hooked) {
-    const orig = fsModule.readFileSync;
-    fsModule.readFileSync = function(filePath, options) {
-      // Pass-through: blocking here disrupts openclaw's own config/LLM operations.
-      // Agent actions are blocked at child_process level instead.
-      return orig.apply(this, arguments);
-    };
-    fsModule.readFileSync.__hooked = true;
+  // Sandbox FS blocklist — only active in sandboxed plugin processes
+  const fsMethodsToGuard = ['readFileSync', 'readFile', 'existsSync', 'statSync', 'readdirSync', 'accessSync'];
+  for (const method of fsMethodsToGuard) {
+    if (fsModule[method] && !fsModule[method].__hooked) {
+      const orig = fsModule[method];
+      fsModule[method] = function(filePath) {
+        const fsBlock = pluginGuard.checkFsAccess(filePath);
+        if (fsBlock) { const e = new Error(fsBlock.reason); e.code = 'EACCES'; throw e; }
+        return orig.apply(this, arguments);
+      };
+      fsModule[method].__hooked = true;
+    }
   }
 }
 
@@ -505,8 +530,17 @@ function hookHttpModule(mod, protocol) {
   if (mod.request && !mod.request.__hooked) {
     const orig = mod.request;
     mod.request = function(options, callback) {
-      // Pass-through: blocking here kills openclaw's LLM API calls.
-      // Agent actions are blocked at child_process level instead.
+      // Sandbox network logging — log outbound requests from plugin processes
+      try {
+        const opts = typeof options === 'string' ? new URL(options) : options;
+        pluginGuard.logNetworkRequest({
+          host: opts.hostname || opts.host,
+          port: opts.port,
+          method: opts.method || 'GET',
+          path: opts.path || opts.pathname,
+          protocol: protocol || 'https:',
+        });
+      } catch {}
       return orig.apply(this, arguments);
     };
     mod.request.__hooked = true;
@@ -515,6 +549,16 @@ function hookHttpModule(mod, protocol) {
   if (mod.get && !mod.get.__hooked) {
     const orig = mod.get;
     mod.get = function(options, callback) {
+      try {
+        const opts = typeof options === 'string' ? new URL(options) : options;
+        pluginGuard.logNetworkRequest({
+          host: opts.hostname || opts.host,
+          port: opts.port,
+          method: 'GET',
+          path: opts.path || opts.pathname,
+          protocol: protocol || 'https:',
+        });
+      } catch {}
       return orig.apply(this, arguments);
     };
     mod.get.__hooked = true;
@@ -527,8 +571,19 @@ function hookGlobalFetch() {
   if (!globalThis.fetch || globalThis.fetch.__hooked) return;
   const origFetch = globalThis.fetch;
   globalThis.fetch = function(url, options) {
-    // Pass-through: blocking here kills openclaw's LLM API calls.
-    // Agent actions are blocked at child_process level instead.
+    // Sandbox network logging — log outbound fetch from plugin processes
+    try {
+      const u = typeof url === 'string' ? new URL(url) : (url instanceof URL ? url : (url && url.url ? new URL(url.url) : null));
+      if (u) {
+        pluginGuard.logNetworkRequest({
+          host: u.hostname,
+          port: u.port || (u.protocol === 'https:' ? 443 : 80),
+          method: (options && options.method) || 'GET',
+          path: u.pathname + u.search,
+          protocol: u.protocol,
+        });
+      }
+    } catch {}
     return origFetch.apply(this, arguments);
   };
   globalThis.fetch.__hooked = true;
