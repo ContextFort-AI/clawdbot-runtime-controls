@@ -10,5 +10,12 @@ CREATE TABLE scan_events (
   skill_name TEXT,
   file_count INTEGER,
   result_suspicious BOOLEAN,
+  haiku_reason TEXT,
+  skill_files JSONB,
+  event_type TEXT,
+  scan_type TEXT DEFAULT 'skill',
   scanned_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Migration: add scan_type column to existing tables
+-- ALTER TABLE scan_events ADD COLUMN scan_type TEXT DEFAULT 'skill';

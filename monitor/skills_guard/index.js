@@ -72,56 +72,89 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const e of entries) {
         if (e.isDirectory()) {
-          skills.push({ skillPath: path.join(dir, e.name), skillName: e.name });
+          skills.push({ skillPath: path.join(dir, e.name), skillName: e.name, type: 'skill' });
         }
       }
       // If there are loose files directly in the skill dir (e.g. SKILL.md), treat as a skill
       const hasLooseFiles = entries.some(e => e.isFile());
       if (hasLooseFiles) {
-        skills.push({ skillPath: dir, skillName: path.basename(dir) });
+        skills.push({ skillPath: dir, skillName: path.basename(dir), type: 'skill' });
       }
     } catch {}
     return skills;
   }
 
+  function getPluginEntries() {
+    const pluginsDir = path.join(HOME, '.claude', 'plugins');
+    const entries = [];
+    try {
+      const dirents = fs.readdirSync(pluginsDir, { withFileTypes: true });
+      for (const e of dirents) {
+        if (e.isDirectory() && !e.name.startsWith('.')) {
+          entries.push({
+            skillPath: path.join(pluginsDir, e.name),
+            skillName: e.name,
+            type: 'plugin',
+          });
+        }
+      }
+    } catch {}
+    return entries;
+  }
+
   function readSkillFiles(skillPath) {
     const files = [];
     const binaryFiles = [];
+    const skippedFiles = []; // { file, reason }
     const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
     const MAX_TOTAL_SIZE = 5 * 1024 * 1024; // 5MB
     let totalSize = 0;
+    let totalSizeExceeded = false;
 
     function walk(dirPath, base) {
       let entries;
       try { entries = fs.readdirSync(dirPath, { withFileTypes: true }); } catch { return; }
       for (const e of entries) {
-        if (e.name.startsWith('.') || e.name === 'node_modules') continue; // skip hidden and node_modules
+        if (e.name.startsWith('.') || e.name === 'node_modules') continue;
         const full = path.join(dirPath, e.name);
+        const rel = path.join(base, e.name);
         if (e.isDirectory()) {
-          walk(full, path.join(base, e.name));
+          walk(full, rel);
         } else if (e.isFile()) {
           try {
             const stat = fs.statSync(full);
-            if (stat.size > MAX_FILE_SIZE || stat.size === 0) continue;
-            if (totalSize + stat.size > MAX_TOTAL_SIZE) continue;
+            if (stat.size === 0) {
+              skippedFiles.push({ file: rel, reason: 'empty file (0 bytes)' });
+              continue;
+            }
+            if (stat.size > MAX_FILE_SIZE) {
+              skippedFiles.push({ file: rel, reason: `exceeds 1MB limit (${(stat.size / 1024 / 1024).toFixed(1)}MB)` });
+              continue;
+            }
+            if (totalSize + stat.size > MAX_TOTAL_SIZE) {
+              if (!totalSizeExceeded) totalSizeExceeded = true;
+              skippedFiles.push({ file: rel, reason: `total size would exceed 5MB limit (already ${(totalSize / 1024 / 1024).toFixed(1)}MB)` });
+              continue;
+            }
             // Check for binaries: read first 512 bytes and check for null bytes
             const buf = Buffer.alloc(Math.min(512, stat.size));
             const fd = fs.openSync(full, 'r');
             try { fs.readSync(fd, buf, 0, buf.length, 0); } finally { fs.closeSync(fd); }
             if (buf.includes(0)) {
-              binaryFiles.push(path.join(base, e.name));
+              binaryFiles.push(rel);
+              skippedFiles.push({ file: rel, reason: 'binary file (contains null bytes)' });
               continue;
             }
 
             const content = readFileSync(full, 'utf8');
             totalSize += stat.size;
-            files.push({ relative_path: path.join(base, e.name), content });
+            files.push({ relative_path: rel, content });
           } catch {}
         }
       }
     }
     walk(skillPath, '');
-    return { files, binaryFiles };
+    return { files, binaryFiles, skippedFiles, totalSize };
   }
 
   function hashSkillFiles(files) {
@@ -165,12 +198,12 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
     } catch {}
   }
 
-  function scanSkillAsync(skillPath, files, hash, installId) {
+  function scanSkillAsync(skillPath, files, hash, installId, type, skippedFiles) {
     if (pendingScans.has(skillPath)) return;
     pendingScans.add(skillPath);
-    track('skill_scan_started', { skill_name: path.basename(skillPath), file_count: files.length });
+    track('skill_scan_started', { skill_name: path.basename(skillPath), file_count: files.length, type: type || 'skill' });
     if (localLogger) {
-      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'scanning', reason: `Scanning skill: ${path.basename(skillPath)} (${files.length} files)`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, file_count: files.length, file_names: files.map(f => f.relative_path), file_contents: files.map(f => ({ path: f.relative_path, content: f.content.slice(0, 2000) })) } }); } catch {}
+      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'scanning', reason: `Scanning ${type || 'skill'}: ${path.basename(skillPath)} (${files.length} files)`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, file_count: files.length, file_names: files.map(f => f.relative_path), file_contents: files.map(f => ({ path: f.relative_path, content: f.content.slice(0, 2000) })), type: type || 'skill' } }); } catch {}
     }
 
     const payload = JSON.stringify({
@@ -178,6 +211,8 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
       skill_path: skillPath,
       skill_name: path.basename(skillPath),
       files: files,
+      type: type || 'skill',
+      skipped_files: skippedFiles && skippedFiles.length > 0 ? skippedFiles : undefined,
     });
 
     // Log what we're sending to Supabase (omit file contents for privacy)
@@ -217,13 +252,13 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
               } else {
                 flaggedSkills.delete(skillPath);
               }
-              track('skill_scan_result', { skill_name: path.basename(skillPath), suspicious: !!result.suspicious, status_code: 200 });
+              track('skill_scan_result', { skill_name: path.basename(skillPath), suspicious: !!result.suspicious, status_code: 200, type: type || 'skill' });
               if (localLogger) {
                 try {
                   if (result.suspicious) {
-                    localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'scan_flagged', reason: result.reason || 'Suspicious skill detected', detail: { skill_name: path.basename(skillPath), skill_path: skillPath, file_count: files.length, file_names: files.map(f => f.relative_path), file_contents: files.map(f => ({ path: f.relative_path, content: f.content.slice(0, 2000) })) } });
+                    localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'scan_flagged', reason: result.reason || 'Suspicious skill detected', detail: { skill_name: path.basename(skillPath), skill_path: skillPath, file_count: files.length, file_names: files.map(f => f.relative_path), file_contents: files.map(f => ({ path: f.relative_path, content: f.content.slice(0, 2000) })), type: type || 'skill' } });
                   } else {
-                    localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'scan_clean', reason: `Skill scan clean: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, file_count: files.length, file_names: files.map(f => f.relative_path) } });
+                    localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'scan_clean', reason: `Scan clean: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, file_count: files.length, file_names: files.map(f => f.relative_path), type: type || 'skill' } });
                   }
                 } catch {}
               }
@@ -244,10 +279,10 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
     }
   }
 
-  function logSkillRemoved(skillPath, installId) {
-    track('skill_removed', { skill_name: path.basename(skillPath) });
+  function logSkillRemoved(skillPath, installId, type) {
+    track('skill_removed', { skill_name: path.basename(skillPath), type: type || 'skill' });
     if (localLogger) {
-      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'removed', reason: `Skill removed: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath } }); } catch {}
+      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'removed', reason: `${(type || 'skill')} removed: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, type: type || 'skill' } }); } catch {}
     }
     const payload = JSON.stringify({
       install_id: installId,
@@ -255,6 +290,7 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
       skill_name: path.basename(skillPath),
       files: [],
       removed: true,
+      type: type || 'skill',
     });
 
     const url = new URL(SKILL_SCAN_API);
@@ -278,8 +314,8 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
     } catch {}
   }
 
-  function scanSkillIfChanged(skillPath) {
-    const { files, binaryFiles } = readSkillFiles(skillPath);
+  function scanSkillIfChanged(skillPath, type) {
+    const { files, binaryFiles, skippedFiles, totalSize } = readSkillFiles(skillPath);
     if (files.length === 0 && binaryFiles.length === 0) {
       // Skill was deleted or is empty — remove from flagged
       flaggedSkills.delete(skillPath);
@@ -288,15 +324,20 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
       return;
     }
 
+    // Log skipped files if any
+    if (skippedFiles.length > 0 && localLogger) {
+      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'files_skipped', reason: `${skippedFiles.length} file(s) skipped in ${type || 'skill'}: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, type: type || 'skill', skipped_files: skippedFiles, total_size_bytes: totalSize, scanned_file_count: files.length } }); } catch {}
+    }
+
     // Flag immediately if binary files found — legitimate skills should not contain binaries
     if (binaryFiles.length > 0) {
       flaggedSkills.set(skillPath, {
         suspicious: true,
-        reason: `Skill contains binary files (${binaryFiles.join(', ')}). Legitimate skills should only contain text files. Please delete these binary files or remove this skill.`,
+        reason: `${(type || 'skill')} contains binary files (${binaryFiles.join(', ')}). Please delete these binary files or remove this ${type || 'skill'}.`,
       });
-      track('skill_binary_detected', { skill_name: path.basename(skillPath), binary_count: binaryFiles.length });
+      track('skill_binary_detected', { skill_name: path.basename(skillPath), binary_count: binaryFiles.length, type: type || 'skill' });
       if (localLogger) {
-        try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'binary_detected', reason: `Binary files found in skill: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, binary_files: binaryFiles } }); } catch {}
+        try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'binary_detected', reason: `Binary files found in ${type || 'skill'}: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, binary_files: binaryFiles, type: type || 'skill' } }); } catch {}
       }
       saveScanCache();
       return;
@@ -307,14 +348,14 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
     if (skillContentHashes.get(skillPath) === hash) return; // unchanged
 
     if (!isNew && localLogger) {
-      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'modified', reason: `Skill modified: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, file_count: files.length, file_names: files.map(f => f.relative_path) } }); } catch {}
+      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'modified', reason: `${(type || 'skill')} modified: ${path.basename(skillPath)}`, detail: { skill_name: path.basename(skillPath), skill_path: skillPath, file_count: files.length, file_names: files.map(f => f.relative_path), type: type || 'skill' } }); } catch {}
     }
 
     const installId = getInstallId();
-    scanSkillAsync(skillPath, files, hash, installId);
+    scanSkillAsync(skillPath, files, hash, installId, type, skippedFiles);
   }
 
-  function watchSkillDirectory(dir) {
+  function watchSkillDirectory(dir, type) {
     const debounceTimers = new Map();
     try {
       const watcher = fs.watch(dir, { recursive: true }, (eventType, filename) => {
@@ -323,19 +364,19 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
         if (debounceTimers.has(skillDir)) clearTimeout(debounceTimers.get(skillDir));
         debounceTimers.set(skillDir, setTimeout(() => {
           debounceTimers.delete(skillDir);
-          // Re-discover skills and scan changed ones
-          const skills = collectSkillEntries(dir);
-          const currentPaths = new Set(skills.map(s => s.skillPath));
-          for (const { skillPath } of skills) {
-            scanSkillIfChanged(skillPath);
+          // Re-discover entries and scan changed ones
+          const entries = type === 'plugin' ? getPluginEntries() : collectSkillEntries(dir);
+          const currentPaths = new Set(entries.map(s => s.skillPath));
+          for (const { skillPath, type: entryType } of entries) {
+            scanSkillIfChanged(skillPath, entryType || type);
           }
-          // Detect deleted skills: any known skill in this dir that no longer exists
+          // Detect deleted entries: any known path in this dir that no longer exists
           for (const knownPath of skillContentHashes.keys()) {
             if (knownPath.startsWith(dir) && !currentPaths.has(knownPath)) {
               flaggedSkills.delete(knownPath);
               skillContentHashes.delete(knownPath);
               const installId = getInstallId();
-              logSkillRemoved(knownPath, installId);
+              logSkillRemoved(knownPath, installId, type);
               saveScanCache();
             }
           }
@@ -388,22 +429,33 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
     for (const dir of dirs) {
       const skills = collectSkillEntries(dir);
       totalSkills += skills.length;
-      for (const { skillPath } of skills) {
-        scanSkillIfChanged(skillPath);
+      for (const { skillPath, type } of skills) {
+        scanSkillIfChanged(skillPath, type);
       }
       watchSkillDirectory(dir);
     }
+
+    // Scan plugins (entire plugin directories, not just skills/)
+    const pluginEntries = getPluginEntries();
+    totalSkills += pluginEntries.length;
+    for (const { skillPath, type } of pluginEntries) {
+      scanSkillIfChanged(skillPath, type);
+    }
+    // Watch the plugins directory itself for new/changed plugins
+    const pluginsDir = path.join(HOME, '.claude', 'plugins');
+    try { if (fs.statSync(pluginsDir).isDirectory()) watchSkillDirectory(pluginsDir, 'plugin'); } catch {}
+
     // Always register session so install_id → user_id mapping exists in Supabase
     registerSession(installId, totalSkills);
-    track('skill_scanner_init', { skill_dir_count: dirs.length, total_skills: totalSkills });
+    track('skill_scanner_init', { skill_dir_count: dirs.length, total_skills: totalSkills, plugin_count: pluginEntries.length });
     if (localLogger) {
-      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'init', reason: `Skill scanner initialized: ${totalSkills} skills in ${dirs.length} directories`, detail: { skill_dir_count: dirs.length, total_skills: totalSkills, directories: dirs } }); } catch {}
+      try { localLogger.logLocal({ event: 'guard_check', guard: 'skill', decision: 'init', reason: `Skill scanner initialized: ${totalSkills} skills/plugins in ${dirs.length} directories`, detail: { skill_dir_count: dirs.length, total_skills: totalSkills, plugin_count: pluginEntries.length, directories: dirs } }); } catch {}
       // Log each skill individually so dashboard can show per-skill status
       for (const dir of dirs) {
         const skills = collectSkillEntries(dir);
-        for (const { skillPath, skillName } of skills) {
+        for (const { skillPath, skillName, type } of skills) {
           try {
-            const { files, binaryFiles } = readSkillFiles(skillPath);
+            const { files, binaryFiles, skippedFiles, totalSize } = readSkillFiles(skillPath);
             const cached = skillContentHashes.has(skillPath);
             const flagged = flaggedSkills.get(skillPath);
             localLogger.logLocal({
@@ -417,13 +469,43 @@ module.exports = function createSkillsGuard({ readFileSync, httpsRequest, baseDi
                 binary_count: binaryFiles.length,
                 file_names: files.map(f => f.relative_path),
                 binary_files: binaryFiles,
+                skipped_files: skippedFiles.length > 0 ? skippedFiles : undefined,
+                total_size_bytes: totalSize,
                 cached,
                 status: flagged?.suspicious ? 'malicious' : (binaryFiles.length > 0 ? 'binary' : 'clean'),
                 flagged_reason: flagged?.reason || null,
+                type: type || 'skill',
               },
             });
           } catch {}
         }
+      }
+      // Log each plugin individually
+      for (const { skillPath, skillName, type } of pluginEntries) {
+        try {
+          const { files, binaryFiles, skippedFiles, totalSize } = readSkillFiles(skillPath);
+          const cached = skillContentHashes.has(skillPath);
+          const flagged = flaggedSkills.get(skillPath);
+          localLogger.logLocal({
+            event: 'guard_check', guard: 'skill', decision: 'init_skill',
+            reason: `Plugin discovered: ${skillName}`,
+            detail: {
+              skill_name: skillName,
+              skill_path: skillPath,
+              skill_dir: pluginsDir,
+              file_count: files.length,
+              binary_count: binaryFiles.length,
+              file_names: files.map(f => f.relative_path),
+              binary_files: binaryFiles,
+              skipped_files: skippedFiles.length > 0 ? skippedFiles : undefined,
+              total_size_bytes: totalSize,
+              cached,
+              status: flagged?.suspicious ? 'malicious' : (binaryFiles.length > 0 ? 'binary' : 'clean'),
+              flagged_reason: flagged?.reason || null,
+              type: 'plugin',
+            },
+          });
+        } catch {}
       }
     }
   }

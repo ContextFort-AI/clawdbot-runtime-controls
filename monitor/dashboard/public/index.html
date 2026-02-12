@@ -157,7 +157,7 @@
 
         <button class="sidebar-btn" data-page="skill" onclick="switchPage('skill')">
           <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          Skill Scanner
+          Skill &amp; Plugin Scanner
           <span class="dot dot-green" id="sb-skill-dot" style="margin-left:auto"></span>
         </button>
         <button class="sidebar-btn" data-page="bash" onclick="switchPage('bash')">
@@ -235,7 +235,7 @@
           <div class="guard-card" onclick="switchPage('skill')">
             <div class="guard-card-header">
               <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              <span>Skill Scanner</span>
+              <span>Skill &amp; Plugin Scanner</span>
               <span class="dot dot-green" id="g-skill-dot" style="margin-left:auto"></span>
             </div>
             <div class="guard-stat"><b id="g-skill-blocks">0</b> blocks</div>
@@ -348,8 +348,8 @@
       <!-- SKILL SCANNER PAGE -->
       <div id="page-skill" style="display:none">
         <div class="page-header">
-          <h1>Skill Scanner</h1>
-          <p>Skills cross-indexed and scanned for prompt injection patterns via Haiku.</p>
+          <h1>Skill &amp; Plugin Scanner</h1>
+          <p>Skills and plugin code cross-indexed and scanned for prompt injection patterns via Haiku.</p>
         </div>
 
         <!-- Skills Status (top section) -->
@@ -629,7 +629,7 @@ function renderBlockBanner() {
   }
 
   banner.style.display = '';
-  const guard = blockEvent.guard === 'skill' ? 'Skill Scanner' : 'Prompt Injection';
+  const guard = blockEvent.guard === 'skill' ? 'Skill & Plugin Scanner' : 'Prompt Injection';
   const guardPage = blockEvent.guard === 'skill' ? 'skill' : 'pi';
   document.getElementById('home-block-title').textContent = `Agent Blocked — ${guard}`;
   document.getElementById('home-block-reason').textContent = blockEvent.reason || 'A security threat was detected. All commands are blocked.';
@@ -716,14 +716,16 @@ function renderSkillStatus() {
     if (!sp) continue;
     const name = e.detail?.skill_name || sp.split('/').pop();
     if (!skillMap.has(sp)) {
-      skillMap.set(sp, { name, path: sp, dir: e.detail?.skill_dir || '', status: 'clean', reason: '', fileCount: 0, fileNames: [], binaryFiles: [], fileContents: [], ts: e.ts, decision: e.decision });
+      skillMap.set(sp, { name, path: sp, dir: e.detail?.skill_dir || '', status: 'clean', reason: '', fileCount: 0, fileNames: [], binaryFiles: [], skippedFiles: [], fileContents: [], ts: e.ts, decision: e.decision, type: e.detail?.type || 'skill' });
     }
     const skill = skillMap.get(sp);
     skill.ts = e.ts; // update to latest timestamp
     skill.decision = e.decision;
+    if (e.detail?.type) skill.type = e.detail.type;
     if (e.detail?.file_count !== undefined) skill.fileCount = e.detail.file_count;
     if (e.detail?.file_names) skill.fileNames = e.detail.file_names;
     if (e.detail?.binary_files) skill.binaryFiles = e.detail.binary_files;
+    if (e.detail?.skipped_files) skill.skippedFiles = e.detail.skipped_files;
     if (e.detail?.file_contents) skill.fileContents = e.detail.file_contents;
     // Determine status
     if (e.decision === 'scan_flagged') { skill.status = 'malicious'; skill.reason = e.reason || ''; }
@@ -741,13 +743,14 @@ function renderSkillStatus() {
   const skills = Array.from(skillMap.values()).filter(s => s.status !== 'removed');
 
   if (skills.length === 0) {
-    container.innerHTML = '<div class="empty">No skills discovered yet. Skills appear when openclaw-secure is active.</div>';
+    container.innerHTML = '<div class="empty">No skills or plugins discovered yet. They appear when openclaw-secure is active.</div>';
     return;
   }
 
   container.innerHTML = `<table><thead><tr>
     <th style="width:40px"></th>
-    <th>Skill</th>
+    <th>Name</th>
+    <th>Type</th>
     <th>Path</th>
     <th>Status</th>
     <th>Reason</th>
@@ -762,19 +765,26 @@ function renderSkillStatus() {
         : s.status === 'scanning'
         ? '<span class="badge badge-blue">Scanning</span>'
         : '<span class="badge badge-green">Clean</span>';
+      const typeBadge = s.type === 'plugin'
+        ? '<span class="badge badge-blue">Plugin</span>'
+        : '<span class="badge" style="background:rgba(255,255,255,0.06);color:#a1a1aa">Skill</span>';
       const deleteBtn = (s.status === 'malicious' || s.status === 'binary')
         ? `<button class="btn btn-sm" style="color:#f87171;border-color:rgba(239,68,68,0.3)" onclick="deleteSkill('${esc(s.path.replace(/'/g, "\\'"))}')">Delete</button>`
         : '';
       const viewFiles = s.fileNames.length > 0 || s.fileContents.length > 0
         ? `<span class="payload-toggle" onclick="openSkillFiles(${i})">${s.fileCount || s.fileNames.length}</span>`
         : `<span style="color:#a1a1aa">${s.fileCount || 0}</span>`;
+      const skippedWarning = s.skippedFiles && s.skippedFiles.length > 0
+        ? `<span title="${esc(s.skippedFiles.map(f => f.file + ': ' + f.reason).join('\n'))}" style="color:#eab308;cursor:help;margin-left:4px">&#9888; ${s.skippedFiles.length} skipped</span>`
+        : '';
       return `<tr>
         <td>${deleteBtn}</td>
         <td style="font-weight:500;font-family:ui-monospace,monospace;font-size:13px">${esc(s.name)}</td>
+        <td>${typeBadge}</td>
         <td style="font-size:12px;color:#a1a1aa;max-width:250px;word-break:break-all">${esc(s.path)}</td>
         <td>${statusBadge}</td>
         <td style="font-size:12px;color:#a1a1aa;max-width:300px">${esc(s.reason)}</td>
-        <td style="text-align:center">${viewFiles}</td>
+        <td style="text-align:center">${viewFiles}${skippedWarning}</td>
         <td style="white-space:nowrap;color:#a1a1aa;font-size:12px">${formatTime(s.ts)}</td>
       </tr>`;
     }).join('') + '</tbody></table>';
@@ -855,7 +865,7 @@ function renderSkillActivityLog() {
       }).join('') + '</tbody></table>';
   } else {
     // Show all skill-specific events (not "allow" per-command checks)
-    const skillDecisions = new Set(['init', 'init_skill', 'scanning', 'scan_clean', 'scan_flagged', 'binary_detected', 'removed', 'modified', 'deleted']);
+    const skillDecisions = new Set(['init', 'init_skill', 'scanning', 'scan_clean', 'scan_flagged', 'binary_detected', 'files_skipped', 'removed', 'modified', 'deleted']);
     let filtered = localEvents.filter(e => e.guard === 'skill' && skillDecisions.has(e.decision));
     if (blockedOnly) {
       filtered = filtered.filter(e => e.decision === 'scan_flagged' || e.decision === 'binary_detected');
@@ -867,18 +877,23 @@ function renderSkillActivityLog() {
     container.innerHTML = `<table><thead><tr>
       <th>Time</th>
       <th>Event</th>
-      <th>Skill</th>
+      <th>Name</th>
+      <th>Type</th>
       <th>Path</th>
       <th>Files</th>
       <th>Detail</th>
     </tr></thead><tbody>` +
       filtered.map((e, i) => {
-        const badgeMap = { init: 'badge-gray', init_skill: 'badge-gray', scanning: 'badge-blue', scan_clean: 'badge-green', scan_flagged: 'badge-red', binary_detected: 'badge-red', removed: 'badge-yellow', modified: 'badge-blue', deleted: 'badge-yellow' };
-        const labelMap = { init: 'Init', init_skill: 'Discovered', scanning: 'Scanning', scan_clean: 'Clean', scan_flagged: 'Flagged', binary_detected: 'Binary', removed: 'Removed', modified: 'Modified', deleted: 'Deleted' };
+        const badgeMap = { init: 'badge-gray', init_skill: 'badge-gray', scanning: 'badge-blue', scan_clean: 'badge-green', scan_flagged: 'badge-red', binary_detected: 'badge-red', files_skipped: 'badge-yellow', removed: 'badge-yellow', modified: 'badge-blue', deleted: 'badge-yellow' };
+        const labelMap = { init: 'Init', init_skill: 'Discovered', scanning: 'Scanning', scan_clean: 'Clean', scan_flagged: 'Flagged', binary_detected: 'Binary', files_skipped: 'Skipped', removed: 'Removed', modified: 'Modified', deleted: 'Deleted' };
         const badge = badgeMap[e.decision] || 'badge-gray';
         const label = labelMap[e.decision] || e.decision;
         const skillName = e.detail?.skill_name || '-';
         const skillPath = e.detail?.skill_path || '';
+        const entryType = e.detail?.type || 'skill';
+        const typeBadge = entryType === 'plugin'
+          ? '<span class="badge badge-blue">Plugin</span>'
+          : '<span class="badge" style="background:rgba(255,255,255,0.06);color:#a1a1aa">Skill</span>';
         const fileCount = e.detail?.file_count ?? e.detail?.file_names?.length ?? '';
         const fileNames = e.detail?.file_names || [];
         const binaryFiles = e.detail?.binary_files || [];
@@ -891,6 +906,8 @@ function renderSkillActivityLog() {
           const detailObj = {};
           if (fileNames.length > 0) detailObj.files = fileNames;
           if (binaryFiles.length > 0) detailObj.binary_files = binaryFiles;
+          if (e.detail?.skipped_files?.length > 0) detailObj.skipped_files = e.detail.skipped_files;
+          if (e.detail?.total_size_bytes) detailObj.total_size = (e.detail.total_size_bytes / 1024).toFixed(1) + ' KB';
           if (e.detail?.directories) detailObj.directories = e.detail.directories;
           if (e.detail?.cached !== undefined) detailObj.cached = e.detail.cached;
           if (Object.keys(detailObj).length > 0) {
@@ -901,6 +918,7 @@ function renderSkillActivityLog() {
           <td style="white-space:nowrap;color:#a1a1aa">${formatTime(e.ts)}</td>
           <td><span class="badge ${badge}">${label}</span></td>
           <td style="font-family:ui-monospace,monospace;font-size:13px">${esc(skillName)}</td>
+          <td>${typeBadge}</td>
           <td style="font-size:12px;color:#a1a1aa;max-width:200px;word-break:break-all">${esc(skillPath)}</td>
           <td style="text-align:center;color:#a1a1aa">${fileCount}</td>
           <td style="font-size:12px;color:#a1a1aa;max-width:350px">${detailParts.join('') + detailExtra}</td>

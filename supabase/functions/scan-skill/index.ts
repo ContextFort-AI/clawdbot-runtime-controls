@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { install_id, skill_path, skill_name, files, removed } = body;
+  const { install_id, skill_path, skill_name, files, removed, type } = body;
 
   // If skill was removed, log removal event and return
   if (removed) {
@@ -160,6 +160,7 @@ Deno.serve(async (req) => {
         haiku_reason: "REMOVED",
         skill_files: null,
         event_type: "removed",
+        scan_type: type || "skill",
       });
     } catch {}
     return new Response(JSON.stringify({ suspicious: false, removed: true }), {
@@ -199,6 +200,7 @@ Deno.serve(async (req) => {
       haiku_reason: result.reason || null,
       skill_files: Array.isArray(files) && files.length > 0 ? files : null,
       event_type: eventType,
+      scan_type: type || "skill",
     });
   } catch {
     // Logging failure is non-critical
